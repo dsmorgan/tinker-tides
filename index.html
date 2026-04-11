@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Tinker Tides</title>
+<link rel="icon" type="image/x-icon" href="../favicon.ico">
+<style>
+:root{
+  --bg:#0d0d1a;
+  --bg-card:#161628;
+  --bg-hover:#1e1e3a;
+  --bg-input:#1a1a30;
+  --text:#E0E8FF;
+  --text-muted:#8890a8;
+  --accent:#39ff14;
+  --gold:#ffd35c;
+  --red:#ff4444;
+  --border:rgba(255,255,255,.08);
+  --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Courier New',monospace;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;overflow-x:hidden;
+  display:flex;flex-direction:column;align-items:center;
+}
+/* Header */
+.header{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:linear-gradient(180deg,#0d0d1a 80%,transparent);
+  padding:8px 16px;display:flex;align-items:center;justify-content:space-between;
+  height:44px;
+}
+.header h1{font-size:18px;color:var(--accent);letter-spacing:2px}
+.header .coins{font-size:14px;color:var(--gold)}
+
+/* Main container */
+.game-wrap{
+  width:100%;max-width:600px;padding:52px 8px 8px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+
+/* Jackpot tickers */
+.jackpot-bar{
+  display:flex;gap:6px;width:100%;justify-content:center;
+}
+.jackpot-ticker{
+  flex:1;text-align:center;padding:6px 4px;border-radius:var(--radius);
+  font-size:11px;font-weight:bold;letter-spacing:1px;
+  border:1px solid var(--border);background:var(--bg-card);
+}
+.jackpot-ticker .jp-label{font-size:9px;text-transform:uppercase;display:block;margin-bottom:2px}
+.jackpot-ticker.mini .jp-label{color:#cd7f32}
+.jackpot-ticker.major .jp-label{color:#c0c0c0}
+.jackpot-ticker.grand .jp-label{color:#ffd700}
+.jackpot-ticker .jp-value{font-size:14px}
+
+/* Reel grid */
+.reel-frame{
+  position:relative;width:100%;aspect-ratio:5/3.2;
+  background:var(--bg-card);border-radius:var(--radius);
+  border:2px solid var(--border);overflow:hidden;
+}
+.reel-grid{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  width:100%;height:100%;gap:2px;padding:2px;
+}
+.reel-col{
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.reel-strip{
+  display:flex;flex-direction:column;
+  transition:transform 0.3s cubic-bezier(.17,.67,.12,1);
+}
+.reel-col.spinning .reel-strip{
+  transition:none;
+}
+.symbol-cell{
+  position:relative;
+  width:100%;aspect-ratio:1;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:4px;
+}
+.symbol-cell .sym-icon{
+  width:80%;height:80%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+}
+/* Symbol tints by tier */
+.sym-icon.tier-low{background:linear-gradient(135deg,#7cb87c,#4a8a4a)}
+.sym-icon.tier-mid{background:linear-gradient(135deg,#6ab0e8,#3a7aba)}
+.sym-icon.tier-high{background:linear-gradient(135deg,#e8b44a,#ba8a2a)}
+.sym-icon.tier-wild{background:linear-gradient(135deg,#ffd700,#daa520)}
+.sym-icon.tier-scatter{background:linear-gradient(135deg,#c084fc,#8b5cf6)}
+.sym-icon.tier-bonus{background:linear-gradient(135deg,#f87171,#dc2626)}
+
+/* Win highlight */
+.symbol-cell.win-highlight{
+  animation:winPulse 0.6s ease infinite alternate;
+}
+@keyframes winPulse{
+  from{box-shadow:inset 0 0 8px rgba(255,215,0,.5),0 0 12px rgba(255,215,0,.3)}
+  to{box-shadow:inset 0 0 16px rgba(255,215,0,.8),0 0 24px rgba(255,215,0,.6)}
+}
+/* Cascade shatter */
+.symbol-cell.shattering{
+  animation:shatter 0.4s ease-out forwards;
+}
+@keyframes shatter{
+  0%{transform:scale(1);opacity:1}
+  50%{transform:scale(1.2) rotate(10deg);opacity:.5}
+  100%{transform:scale(0) rotate(45deg);opacity:0}
+}
+/* Cascade drop */
+.symbol-cell.dropping{
+  animation:dropIn 0.3s ease-out;
+}
+@keyframes dropIn{
+  from{transform:translateY(-100%);opacity:0}
+  to{transform:translateY(0);opacity:1}
+}
+
+/* Payline overlay */
+.payline-overlay{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  pointer-events:none;z-index:10;
+}
+.payline-overlay svg{width:100%;height:100%}
+
+/* Win display */
+.win-display{
+  width:100%;text-align:center;padding:4px;
+  font-size:16px;font-weight:bold;min-height:28px;
+  color:var(--gold);
+}
+.win-display.big-win{
+  animation:bigWinPulse 0.5s ease infinite alternate;
+  font-size:22px;
+}
+@keyframes bigWinPulse{
+  from{text-shadow:0 0 8px var(--gold)}
+  to{text-shadow:0 0 24px var(--gold),0 0 48px rgba(255,211,92,.5)}
+}
+
+/* Controls */
+.controls{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:4px 0;
+}
+.bet-control{
+  display:flex;align-items:center;gap:4px;font-size:13px;
+}
+.bet-control button{
+  width:28px;height:28px;border:1px solid var(--border);
+  background:var(--bg-card);color:var(--text);border-radius:4px;
+  cursor:pointer;font-size:16px;font-family:inherit;
+}
+.bet-control button:hover{background:var(--bg-hover)}
+.bet-control .bet-val{min-width:30px;text-align:center;font-weight:bold;color:var(--gold)}
+
+.btn-spin{
+  flex:1;height:44px;border:none;border-radius:var(--radius);
+  background:linear-gradient(135deg,#39ff14,#22cc00);color:#000;
+  font-family:inherit;font-size:16px;font-weight:bold;
+  cursor:pointer;letter-spacing:2px;
+  transition:all .15s;
+}
+.btn-spin:hover{filter:brightness(1.2);transform:scale(1.02)}
+.btn-spin:active{transform:scale(0.98)}
+.btn-spin:disabled{
+  background:var(--bg-card);color:var(--text-muted);
+  cursor:not-allowed;filter:none;transform:none;
+}
+.btn-spin.free-spin-btn{
+  background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;
+}
+
+.total-bet{font-size:11px;color:var(--text-muted);text-align:right;white-space:nowrap}
+
+/* Free spins counter */
+.free-spins-bar{
+  width:100%;text-align:center;padding:6px;
+  background:linear-gradient(135deg,rgba(168,85,247,.2),rgba(124,58,237,.2));
+  border:1px solid rgba(168,85,247,.3);border-radius:var(--radius);
+  font-size:13px;color:#c084fc;display:none;
+}
+.free-spins-bar.active{display:block}
+
+/* Cascade multiplier display */
+.cascade-display{
+  position:absolute;top:4px;right:4px;z-index:20;
+  padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;
+  background:rgba(255,211,92,.15);color:var(--gold);
+  border:1px solid rgba(255,211,92,.3);display:none;
+}
+.cascade-display.active{display:block}
+
+/* Footer tabs */
+.footer-tabs{
+  display:flex;gap:4px;width:100%;
+}
+.footer-tab{
+  flex:1;padding:8px 4px;text-align:center;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text-muted);
+  cursor:pointer;font-family:inherit;font-size:11px;
+  transition:all .15s;
+}
+.footer-tab:hover{background:var(--bg-hover)}
+.footer-tab.active{color:var(--accent);border-color:var(--accent)}
+
+/* Modal overlay */
+.modal-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.85);z-index:200;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;
+}
+.modal-overlay.hidden{display:none}
+.modal-content{
+  max-width:500px;width:90%;max-height:80vh;overflow-y:auto;
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:16px;
+}
+.modal-content h2{color:var(--accent);margin-bottom:12px;font-size:16px}
+.modal-close{
+  margin-top:12px;padding:8px 16px;border:1px solid var(--border);
+  background:var(--bg-card);color:var(--text);border-radius:var(--radius);
+  cursor:pointer;font-family:inherit;width:100%;
+}
+.modal-close:hover{background:var(--bg-hover)}
+
+/* Paytable */
+.paytable-row{
+  display:flex;align-items:center;gap:8px;padding:6px 0;
+  border-bottom:1px solid var(--border);font-size:12px;
+}
+.paytable-icon{width:32px;height:32px;flex-shrink:0}
+.paytable-name{flex:1;font-size:11px}
+.paytable-pays{display:flex;gap:4px;font-size:10px;color:var(--gold)}
+.paytable-pays span{min-width:36px;text-align:center}
+
+/* Stats */
+.stat-row{
+  display:flex;justify-content:space-between;padding:4px 0;
+  border-bottom:1px solid var(--border);font-size:12px;
+}
+.stat-label{color:var(--text-muted)}
+.stat-value{color:var(--gold);font-weight:bold}
+
+/* === TREASURE HUNT BONUS === */
+.treasure-hunt{text-align:center}
+.treasure-hunt h2{color:var(--gold);font-size:20px;margin-bottom:16px}
+.treasure-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+  margin:16px 0;
+}
+.treasure-chest{
+  aspect-ratio:1;background:var(--bg-card);border:2px solid #8b6914;
+  border-radius:var(--radius);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;transition:all .2s;position:relative;
+}
+.treasure-chest:hover:not(.opened){
+  transform:scale(1.05);border-color:var(--gold);
+  box-shadow:0 0 12px rgba(255,215,0,.3);
+}
+.treasure-chest.opened{cursor:default;opacity:.8}
+.treasure-chest .chest-reveal{
+  font-size:12px;font-weight:bold;
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:2px;
+}
+.chest-reveal.prize{color:var(--gold)}
+.chest-reveal.skull-reveal{color:var(--red)}
+.treasure-total{
+  font-size:18px;color:var(--gold);margin:12px 0;font-weight:bold;
+}
+.treasure-multiplier{
+  font-size:14px;color:#c084fc;margin:4px 0;
+}
+
+/* === WHEEL OF FORTUNE === */
+.wheel-container{text-align:center;position:relative}
+.wheel-container h2{color:var(--gold);font-size:20px;margin-bottom:8px}
+.wheel-wrap{
+  position:relative;width:280px;height:280px;margin:16px auto;
+}
+.wheel-canvas{width:100%;height:100%}
+.wheel-pointer{
+  position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+  width:0;height:0;border-left:12px solid transparent;
+  border-right:12px solid transparent;border-top:24px solid var(--gold);
+  z-index:5;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+}
+.wheel-center{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;border-radius:50%;
+  background:radial-gradient(circle,var(--gold),#8b6914);
+  border:3px solid #5c3a1a;z-index:5;
+}
+.wheel-result{
+  font-size:18px;color:var(--gold);margin:12px 0;font-weight:bold;
+  min-height:28px;
+}
+.btn-wheel-spin{
+  padding:10px 24px;border:none;border-radius:var(--radius);
+  background:linear-gradient(135deg,var(--gold),#b8860b);color:#000;
+  font-family:inherit;font-size:14px;font-weight:bold;
+  cursor:pointer;letter-spacing:1px;
+}
+.btn-wheel-spin:disabled{opacity:.5;cursor:not-allowed}
+
+/* === JACKPOT WIN === */
+.jackpot-win{
+  text-align:center;
+}
+.jackpot-win h2{font-size:28px;margin-bottom:16px}
+.jackpot-win .jp-amount{
+  font-size:36px;font-weight:bold;
+  animation:jackpotGlow 0.5s ease infinite alternate;
+}
+@keyframes jackpotGlow{
+  from{text-shadow:0 0 8px currentColor}
+  to{text-shadow:0 0 32px currentColor,0 0 64px currentColor}
+}
+.jackpot-win .jp-coins{
+  position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:300;
+}
+.coin-particle{
+  position:absolute;width:16px;height:16px;border-radius:50%;
+  background:radial-gradient(circle,var(--gold),#8b6914);
+  animation:coinFall linear forwards;
+}
+@keyframes coinFall{
+  from{transform:translateY(-20px) rotate(0);opacity:1}
+  to{transform:translateY(100vh) rotate(720deg);opacity:0}
+}
+
+/* Notification banner */
+.notification{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:150;padding:16px 32px;border-radius:var(--radius);
+  font-size:20px;font-weight:bold;text-align:center;
+  animation:notifyIn 0.4s ease,notifyOut 0.4s ease 1.6s forwards;
+  pointer-events:none;
+}
+@keyframes notifyIn{
+  from{transform:translate(-50%,-50%) scale(0);opacity:0}
+  to{transform:translate(-50%,-50%) scale(1);opacity:1}
+}
+@keyframes notifyOut{
+  from{opacity:1}
+  to{opacity:0}
+}
+.notification.free-spins-notify{
+  background:linear-gradient(135deg,rgba(168,85,247,.9),rgba(124,58,237,.9));
+  color:#fff;border:2px solid #c084fc;
+}
+.notification.cascade-notify{
+  background:linear-gradient(135deg,rgba(255,211,92,.9),rgba(184,134,11,.9));
+  color:#000;border:2px solid var(--gold);
+}
+.notification.bonus-notify{
+  background:linear-gradient(135deg,rgba(220,38,38,.9),rgba(139,32,32,.9));
+  color:#fff;border:2px solid #f87171;
+}
+
+/* Refill prompt */
+.refill-prompt{
+  text-align:center;padding:16px;
+}
+.refill-prompt h3{color:var(--gold);margin-bottom:8px}
+.refill-prompt p{color:var(--text-muted);font-size:12px;margin-bottom:12px}
+.btn-refill{
+  padding:10px 20px;border:none;border-radius:var(--radius);
+  background:linear-gradient(135deg,var(--gold),#b8860b);color:#000;
+  font-family:inherit;font-size:14px;font-weight:bold;cursor:pointer;
+}
+.btn-refill:disabled{opacity:.5;cursor:not-allowed}
+
+/* Settings */
+.settings-section{padding:8px 0}
+.settings-section h3{color:var(--accent);font-size:13px;margin-bottom:8px}
+.btn-reset{
+  padding:8px 16px;border:1px solid var(--red);
+  background:transparent;color:var(--red);border-radius:var(--radius);
+  cursor:pointer;font-family:inherit;font-size:12px;
+}
+.btn-reset:hover{background:rgba(255,68,68,.1)}
+
+/* Responsive */
+@media(max-width:420px){
+  .header h1{font-size:14px}
+  .jackpot-ticker .jp-value{font-size:12px}
+  .controls{flex-wrap:wrap}
+  .btn-spin{min-width:120px}
+  .treasure-grid{grid-template-columns:repeat(3,1fr)}
+  .wheel-wrap{width:240px;height:240px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>TINKER TIDES</h1>
+  <span class="coins" id="coinDisplay">1,000</span>
+</div>
+
+<div class="game-wrap">
+  <!-- Jackpot tickers -->
+  <div class="jackpot-bar">
+    <div class="jackpot-ticker mini">
+      <span class="jp-label">Mini</span>
+      <span class="jp-value" id="jpMini">100</span>
+    </div>
+    <div class="jackpot-ticker major">
+      <span class="jp-label">Major</span>
+      <span class="jp-value" id="jpMajor">1,000</span>
+    </div>
+    <div class="jackpot-ticker grand">
+      <span class="jp-label">Grand</span>
+      <span class="jp-value" id="jpGrand">10,000</span>
+    </div>
+  </div>
+
+  <!-- Free spins counter -->
+  <div class="free-spins-bar" id="freeSpinsBar">
+    FREE SPINS: <span id="freeSpinsCount">0</span> remaining (×<span id="freeSpinsMult">2</span>)
+  </div>
+
+  <!-- Reel frame -->
+  <div class="reel-frame" id="reelFrame">
+    <div class="reel-grid" id="reelGrid"></div>
+    <div class="payline-overlay" id="paylineOverlay"></div>
+    <div class="cascade-display" id="cascadeDisplay">×1</div>
+  </div>
+
+  <!-- Win display -->
+  <div class="win-display" id="winDisplay"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="bet-control">
+      <span>BET</span>
+      <button id="betDown">−</button>
+      <span class="bet-val" id="betDisplay">1</span>
+      <button id="betUp">+</button>
+    </div>
+    <button class="btn-spin" id="spinBtn">SPIN</button>
+    <div class="total-bet">
+      <div>Total: <span id="totalBetDisplay">20</span></div>
+    </div>
+  </div>
+
+  <!-- Footer tabs -->
+  <div class="footer-tabs">
+    <button class="footer-tab" data-tab="paytable">Paytable</button>
+    <button class="footer-tab" data-tab="stats">Stats</button>
+    <button class="footer-tab" data-tab="settings">Settings</button>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay hidden" id="modal">
+  <div class="modal-content" id="modalContent"></div>
+</div>
+
+<script src="icon-data.js"></script>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -1,5 +1,23 @@
 /* Tinker Tides — Static Game Data */
 
+// Per-symbol cell background colors (Style 7)
+const SYMBOL_COLORS = {
+  compass:  '#00897b', // teal
+  anchor:   '#1565c0', // navy blue
+  rum:      '#2e7d32', // forest green
+  cannon:   '#4527a0', // deep purple
+  parrot:   '#b71c1c', // deep red
+  ship:     '#37474f', // slate
+  hat:      '#37474f', // slate
+  swords:   '#b71c1c', // deep red
+  chest:    '#daa520', // bright goldenrod
+  skull:    '#263238', // near-black
+  captain:  '#263238', // near-black
+  wild:     '#1a1208', // very dark (for coin contrast)
+  scatter:  '#1f1208', // very dark leather
+  bonus:    '#7d4a26', // wood brown
+};
+
 const RARITY_TINTS = {
   low:  { bg: 'linear-gradient(135deg,#4a6741,#2d4a2d)', glow: '#5a8a50' },
   mid:  { bg: 'linear-gradient(135deg,#3b6d9e,#1e3f6a)', glow: '#4a90d9' },
@@ -57,8 +75,8 @@ const PAYLINES = [
   [0,1,2,2,1], // 20: wave
 ];
 
-// Bet levels (coins per line)
-const BET_LEVELS = [1, 2, 5, 10, 25, 50];
+// Bet levels (credits per line, 1 credit = $0.01)
+const BET_LEVELS = [1, 2, 3, 5, 10, 25];
 const NUM_LINES = 20;
 
 // Reel strips: array of symbol IDs per reel
@@ -167,20 +185,20 @@ const TREASURE_HUNT_CONFIG = {
   ],
 };
 
-// Wheel of Fortune config
+// Wheel of Fortune config — alternating wood tones (light/dark oak)
 const WHEEL_SEGMENTS = [
-  { label: '10×',        type: 'coins',    value: 10,  color: '#2d6a4f' },
-  { label: '25×',        type: 'coins',    value: 25,  color: '#40916c' },
-  { label: '5 FREE',     type: 'freespins',value: 5,   color: '#6b3a7a' },
-  { label: '50×',        type: 'coins',    value: 50,  color: '#2d6a4f' },
-  { label: '15×',        type: 'coins',    value: 15,  color: '#40916c' },
-  { label: '100×',       type: 'coins',    value: 100, color: '#1b4332' },
-  { label: 'SPIN AGAIN', type: 'respin',   value: 0,   color: '#b8860b' },
-  { label: '20×',        type: 'coins',    value: 20,  color: '#40916c' },
-  { label: '10 FREE',    type: 'freespins',value: 10,  color: '#6b3a7a' },
-  { label: '250×',       type: 'coins',    value: 250, color: '#8b2020' },
-  { label: '50×',        type: 'coins',    value: 50,  color: '#2d6a4f' },
-  { label: 'JACKPOT',    type: 'jackpot',  value: 0,   color: '#ffd700' },
+  { label: '10×',        type: 'coins',    value: 10,  color: '#8b5a2b' }, // dark oak
+  { label: '25×',        type: 'coins',    value: 25,  color: '#c89060' }, // light oak
+  { label: '5 FREE',     type: 'freespins',value: 5,   color: '#5c3a1a' }, // walnut
+  { label: '50×',        type: 'coins',    value: 50,  color: '#c89060' }, // light oak
+  { label: '15×',        type: 'coins',    value: 15,  color: '#8b5a2b' }, // dark oak
+  { label: '100×',       type: 'coins',    value: 100, color: '#5c3a1a' }, // walnut
+  { label: 'SPIN AGAIN', type: 'respin',   value: 0,   color: '#b8860b' }, // gold accent
+  { label: '20×',        type: 'coins',    value: 20,  color: '#8b5a2b' }, // dark oak
+  { label: '10 FREE',    type: 'freespins',value: 10,  color: '#5c3a1a' }, // walnut
+  { label: '250×',       type: 'coins',    value: 250, color: '#a0521a' }, // mahogany (premium)
+  { label: '50×',        type: 'coins',    value: 50,  color: '#c89060' }, // light oak
+  { label: 'JACKPOT',    type: 'jackpot',  value: 0,   color: '#ffd700' }, // gold
 ];
 
 // Jackpot config
@@ -190,10 +208,17 @@ const JACKPOT_CONFIG = {
   grand: { start: 10000, triggerChance: 1/10000, contribution: 0.0015, label: 'Grand', color: '#ffd700' },
 };
 
-// Economy
-const STARTING_COINS = 1000;
-const REFILL_AMOUNT = 500;
-const REFILL_COOLDOWN = 4 * 60 * 60 * 1000; // 4 hours in ms
+// Economy (credits = pennies, $1 = 100 credits)
+const STARTING_CREDITS = 0; // machine starts empty
+const BILL_VALUE = 10000;   // $100 bill = 10,000 credits
+
+// Loyalty card tiers (by total wagered credits)
+const LOYALTY_TIERS = [
+  { id: 'bronze',   label: 'Bronze',   color: '#cd7f32', minWagered: 0 },
+  { id: 'silver',   label: 'Silver',   color: '#c0c0c0', minWagered: 5000 },    // $50
+  { id: 'gold',     label: 'Gold',     color: '#ffd700', minWagered: 50000 },   // $500
+  { id: 'platinum', label: 'Platinum', color: '#e5e4e2', minWagered: 500000 },  // $5,000
+];
 
 // Payline colors for highlighting
 const PAYLINE_COLORS = [

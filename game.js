@@ -5,13 +5,18 @@ const REELS = 5;
 const ROWS = 3;
 
 // ─── State ───────────────────────────────────────────────────────────
+function generatePlayerId() {
+  return 'PIRATE #' + (1000 + Math.floor(Math.random() * 9000));
+}
+
 function defaultState() {
   return {
-    version: 1,
-    coins: STARTING_COINS,
+    version: 2,
+    credits: STARTING_CREDITS,
     totalSpins: 0,
     totalWon: 0,
     totalBet: 0,
+    totalInserted: 0,
     betPerLine: 1,
     jackpots: {
       mini: JACKPOT_CONFIG.mini.start,
@@ -19,7 +24,10 @@ function defaultState() {
       grand: JACKPOT_CONFIG.grand.start,
     },
     freeSpins: { active: false, remaining: 0, multiplier: 1 },
-    lastRefill: 0,
+    loyalty: {
+      playerId: generatePlayerId(),
+      cardInserted: false,
+    },
     stats: {
       biggestWin: 0,
       cascadeRecord: 0,
@@ -31,8 +39,11 @@ function defaultState() {
 
 let state = defaultState();
 let spinning = false;
+let billInserting = false;
 let currentGrid = []; // 5×3 grid of symbol IDs
 let betLevelIdx = 0;
+var displayedCredits = 0; // for tick-up animation
+var creditTickTimer = null;
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -40,23 +51,31 @@ function saveState() {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    var raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    const saved = JSON.parse(raw);
-    // Migration
-    const def = defaultState();
-    for (const k of Object.keys(def)) {
+    var saved = JSON.parse(raw);
+    var def = defaultState();
+    // Migration: v1 coins → v2 credits
+    if (saved.coins !== undefined && saved.credits === undefined) {
+      saved.credits = saved.coins;
+      delete saved.coins;
+    }
+    for (var k in def) {
       if (!(k in saved)) saved[k] = def[k];
     }
     if (!saved.stats) saved.stats = def.stats;
-    for (const k of Object.keys(def.stats)) {
-      if (!(k in saved.stats)) saved.stats[k] = def.stats[k];
+    for (var sk in def.stats) {
+      if (!(sk in saved.stats)) saved.stats[sk] = def.stats[sk];
     }
     if (!saved.jackpots) saved.jackpots = def.jackpots;
-    for (const k of Object.keys(def.jackpots)) {
-      if (!(k in saved.jackpots)) saved.jackpots[k] = def.jackpots[k];
+    for (var jk in def.jackpots) {
+      if (!(jk in saved.jackpots)) saved.jackpots[jk] = def.jackpots[jk];
     }
     if (!saved.freeSpins) saved.freeSpins = def.freeSpins;
+    if (!saved.loyalty) saved.loyalty = def.loyalty;
+    if (!saved.loyalty.playerId) saved.loyalty.playerId = generatePlayerId();
+    if (saved.totalInserted === undefined) saved.totalInserted = 0;
+    saved.version = 2;
     state = saved;
     betLevelIdx = BET_LEVELS.indexOf(state.betPerLine);
     if (betLevelIdx < 0) betLevelIdx = 0;
@@ -191,9 +210,19 @@ function checkTreasureHunt(grid) {
 // ─── Rendering ───────────────────────────────────────────────────────
 var $id = function(id) { return document.getElementById(id); };
 
+function styleCell(cell, symId) {
+  // Apply per-symbol background color
+  var color = SYMBOL_COLORS[symId];
+  if (color) cell.style.background = color;
+  // Apply special class for symbols with custom treatments (defined in CSS)
+  cell.classList.add('sym-' + symId);
+}
+
 function renderGrid(grid, highlightPositions) {
   var container = $id('reelGrid');
   container.textContent = '';
+  var frameH = $id('reelFrame').clientHeight;
+  var cellH = Math.floor(frameH / ROWS);
   for (var r = 0; r < REELS; r++) {
     var col = document.createElement('div');
     col.className = 'reel-col';
@@ -205,8 +234,11 @@ function renderGrid(grid, highlightPositions) {
       var sym = SYMBOLS[symId];
       var cell = document.createElement('div');
       cell.className = 'symbol-cell';
+      cell.style.height = cellH + 'px';
+      cell.style.minHeight = cellH + 'px';
       cell.dataset.reel = r;
       cell.dataset.row = row;
+      styleCell(cell, symId);
       if (highlightPositions) {
         for (var hi = 0; hi < highlightPositions.length; hi++) {
           if (highlightPositions[hi].reel === r && highlightPositions[hi].row === row) {
@@ -215,20 +247,7 @@ function renderGrid(grid, highlightPositions) {
           }
         }
       }
-      // Icon is built from static game data constants only
-      var iconEl = document.createElement('div');
-      iconEl.className = 'sym-icon tier-' + sym.tier;
-      iconEl.style.width = '48px';
-      iconEl.style.height = '48px';
-      var maskUrl = 'url(\'data:image/svg+xml,' + ICON_DATA[sym.icon] + '\')';
-      iconEl.style.webkitMaskImage = maskUrl;
-      iconEl.style.maskImage = maskUrl;
-      iconEl.style.webkitMaskSize = 'contain';
-      iconEl.style.maskSize = 'contain';
-      iconEl.style.webkitMaskRepeat = 'no-repeat';
-      iconEl.style.maskRepeat = 'no-repeat';
-      iconEl.style.webkitMaskPosition = 'center';
-      iconEl.style.maskPosition = 'center';
+      var iconEl = createIconEl(sym.icon, sym.tier);
       cell.appendChild(iconEl);
       strip.appendChild(cell);
     }
@@ -238,11 +257,12 @@ function renderGrid(grid, highlightPositions) {
 }
 
 function createIconEl(slug, tier, size) {
-  size = size || 48;
   var el = document.createElement('div');
-  el.className = 'sym-icon tier-' + tier;
-  el.style.width = size + 'px';
-  el.style.height = size + 'px';
+  el.className = 'sym-icon';
+  if (size) {
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+  }
   var data = ICON_DATA[slug];
   if (data) {
     var maskUrl = 'url(\'data:image/svg+xml,' + data + '\')';
@@ -262,7 +282,9 @@ function createIconEl(slug, tier, size) {
 }
 
 function updateUI() {
-  $id('coinDisplay').textContent = formatNum(Math.floor(state.coins));
+  // Credit display with tick-up
+  animateCreditDisplay(Math.floor(state.credits));
+
   $id('betDisplay').textContent = state.betPerLine;
   $id('totalBetDisplay').textContent = formatNum(state.betPerLine * NUM_LINES);
   $id('jpMini').textContent = formatNum(Math.floor(state.jackpots.mini));
@@ -278,6 +300,9 @@ function updateUI() {
     fsBar.classList.remove('active');
   }
 
+  // Loyalty badge
+  updateLoyaltyBadge();
+
   // Spin button state
   var spinBtn = $id('spinBtn');
   var totalBet = state.betPerLine * NUM_LINES;
@@ -285,7 +310,7 @@ function updateUI() {
     spinBtn.textContent = 'FREE SPIN (' + state.freeSpins.remaining + ')';
     spinBtn.className = 'btn-spin free-spin-btn';
     spinBtn.disabled = spinning;
-  } else if (state.coins < totalBet) {
+  } else if (state.credits < totalBet) {
     spinBtn.textContent = 'SPIN';
     spinBtn.className = 'btn-spin';
     spinBtn.disabled = true;
@@ -294,6 +319,138 @@ function updateUI() {
     spinBtn.className = 'btn-spin';
     spinBtn.disabled = spinning;
   }
+}
+
+// ─── Credit display animation ────────────────────────────────────────
+function animateCreditDisplay(target) {
+  if (creditTickTimer) clearInterval(creditTickTimer);
+  var el = $id('creditDisplay');
+
+  // Decrement = instant snap
+  if (target <= displayedCredits) {
+    displayedCredits = target;
+    el.textContent = formatNum(target);
+    el.classList.remove('ticking');
+    return;
+  }
+
+  // Increment = count up
+  var diff = target - displayedCredits;
+  var step = Math.max(1, Math.floor(diff / 25));
+  el.classList.add('ticking');
+  creditTickTimer = setInterval(function() {
+    displayedCredits += step;
+    if (displayedCredits >= target) {
+      displayedCredits = target;
+      el.textContent = formatNum(target);
+      el.classList.remove('ticking');
+      clearInterval(creditTickTimer);
+      creditTickTimer = null;
+    } else {
+      el.textContent = formatNum(displayedCredits);
+    }
+  }, 30);
+}
+
+function showWinAmount(amount) {
+  var el = $id('winLedDisplay');
+  el.textContent = formatNum(Math.floor(amount));
+  el.classList.add('win-flash');
+}
+
+function clearWinAmount() {
+  var el = $id('winLedDisplay');
+  el.textContent = '0';
+  el.classList.remove('win-flash');
+}
+
+// ─── Loyalty system ──────────────────────────────────────────────────
+function getLoyaltyTier() {
+  var wagered = state.totalBet;
+  var tier = LOYALTY_TIERS[0];
+  for (var i = 0; i < LOYALTY_TIERS.length; i++) {
+    if (wagered >= LOYALTY_TIERS[i].minWagered) tier = LOYALTY_TIERS[i];
+  }
+  return tier;
+}
+
+function updateLoyaltyBadge() {
+  var tier = getLoyaltyTier();
+  $id('tierDot').style.background = tier.color;
+  $id('tierLabel').textContent = tier.label;
+  $id('tierLabel').style.color = tier.color;
+  $id('playerId').textContent = state.loyalty.playerId;
+}
+
+async function showCardInsert() {
+  var overlay = $id('cardOverlay');
+  var card = $id('loyaltyCard');
+  var tier = getLoyaltyTier();
+
+  $id('cardIdText').textContent = state.loyalty.playerId;
+  $id('cardTierText').textContent = tier.label.toUpperCase();
+  $id('cardTierText').style.color = tier.color;
+
+  // Reset card state
+  card.classList.remove('phase-rise', 'phase-insert');
+  overlay.classList.remove('hidden');
+  await sleep(1000);
+
+  // Phase 1: Card rises from below up to just below the reader slot
+  card.classList.add('phase-rise');
+  await sleep(1000);
+
+  // Phase 2: Card slides up into the reader slot and disappears
+  card.classList.add('phase-insert');
+  await sleep(600);
+
+  // Fade out overlay
+  overlay.style.transition = 'opacity 0.4s';
+  overlay.style.opacity = '0';
+  await sleep(400);
+
+  overlay.classList.add('hidden');
+  overlay.style.opacity = '';
+  overlay.style.transition = '';
+  card.classList.remove('phase-rise', 'phase-insert');
+
+  state.loyalty.cardInserted = true;
+  saveState();
+}
+
+// ─── Bill inserter ───────────────────────────────────────────────────
+async function insertBill() {
+  if (billInserting) return;
+  billInserting = true;
+
+  var billAnim = $id('billAnim');
+  // Reset
+  billAnim.classList.remove('phase-slide', 'phase-eat');
+  billAnim.style.opacity = '';
+  billAnim.style.display = 'flex';
+  await sleep(50);
+
+  // Phase 1: bill slides up to the slot opening
+  billAnim.classList.add('phase-slide');
+  await sleep(700);
+
+  // Phase 2: bill gets eaten into the machine (slides further up, fades)
+  billAnim.classList.remove('phase-slide');
+  billAnim.classList.add('phase-eat');
+  await sleep(600);
+
+  // Hide and reset
+  billAnim.style.display = 'none';
+  billAnim.classList.remove('phase-eat');
+  billAnim.style.opacity = '';
+
+  // Add credits
+  state.credits += BILL_VALUE;
+  state.totalInserted += BILL_VALUE;
+  saveState();
+  updateUI();
+
+  billInserting = false;
 }
 
 function formatNum(n) {
@@ -309,12 +466,12 @@ async function doSpin() {
   var totalBet = state.betPerLine * NUM_LINES;
 
   if (!isFree) {
-    if (state.coins < totalBet) {
+    if (state.credits < totalBet) {
       spinning = false;
       showRefillPrompt();
       return;
     }
-    state.coins -= totalBet;
+    state.credits -= totalBet;
     state.totalBet += totalBet;
     // Contribute to jackpots
     for (var key in JACKPOT_CONFIG) {
@@ -325,8 +482,7 @@ async function doSpin() {
   }
 
   state.totalSpins++;
-  $id('winDisplay').textContent = '';
-  $id('winDisplay').className = 'win-display';
+  clearWinAmount();
   clearPaylineOverlay();
   hideCascadeDisplay();
   updateUI();
@@ -355,69 +511,173 @@ async function doSpin() {
   }
 
   // Check if player is broke
-  if (!state.freeSpins.active && state.coins < BET_LEVELS[0] * NUM_LINES) {
+  if (!state.freeSpins.active && state.credits < BET_LEVELS[0] * NUM_LINES) {
     showRefillPrompt();
   }
+}
+
+// Check if reel r has a partial match building from left
+function hasNearWin(targetGrid, reelIdx) {
+  if (reelIdx < 3) return false;
+  for (var li = 0; li < PAYLINES.length; li++) {
+    var line = PAYLINES[li];
+    var first = targetGrid[0][line[0]];
+    if (first === 'scatter' || first === 'bonus') continue;
+    var matchCount = 1;
+    for (var ri = 1; ri < reelIdx; ri++) {
+      var sym = targetGrid[ri][line[ri]];
+      if (sym === first || (SYMBOLS[sym] && SYMBOLS[sym].isWild) || (SYMBOLS[first] && SYMBOLS[first].isWild)) {
+        matchCount++;
+      } else {
+        break;
+      }
+    }
+    if (matchCount >= reelIdx && matchCount >= 3) return true;
+  }
+  return false;
+}
+
+// Ease-out with overshoot for bounce-lock feel
+function easeOutBack(t) {
+  var s = 1.4; // overshoot amount
+  var t1 = t - 1;
+  return t1 * t1 * ((s + 1) * t1 + s) + 1;
+}
+
+function easeOutCubic(t) {
+  var t1 = t - 1;
+  return t1 * t1 * t1 + 1;
 }
 
 async function animateReels(targetGrid) {
   var container = $id('reelGrid');
   container.textContent = '';
-  var cols = [];
 
+  // Detect near-wins
+  var anticipation = [];
+  for (var ar = 0; ar < REELS; ar++) {
+    anticipation.push(hasNearWin(targetGrid, ar));
+  }
+
+  // Measure: create one temp cell to get the real height
+  var reelFrame = $id('reelFrame');
+  var frameH = reelFrame.clientHeight;
+  var cellH = Math.floor(frameH / ROWS); // each cell = 1/3 of frame height
+
+  // Build reel columns
+  var cols = [];
   for (var r = 0; r < REELS; r++) {
     var col = document.createElement('div');
-    col.className = 'reel-col spinning';
+    col.className = 'reel-col';
     var strip = document.createElement('div');
     strip.className = 'reel-strip';
 
-    // Add extra random symbols for scrolling effect + target
-    var extraCount = 8 + r * 3;
+    var extraCount = 30 + r * 8;
+    if (anticipation[r]) extraCount += 15;
+
     for (var i = 0; i < extraCount; i++) {
       var symId = randomSymbolFromReel(r);
-      var sym = SYMBOLS[symId];
-      var cell = document.createElement('div');
-      cell.className = 'symbol-cell';
-      cell.appendChild(createIconEl(sym.icon, sym.tier));
-      strip.appendChild(cell);
+      strip.appendChild(makeSpinCell(symId, cellH));
     }
-    // Add final 3 (the target)
+    // Target 3 at the end
     for (var row = 0; row < ROWS; row++) {
-      var symId2 = targetGrid[r][row];
-      var sym2 = SYMBOLS[symId2];
-      var cell2 = document.createElement('div');
-      cell2.className = 'symbol-cell';
-      cell2.appendChild(createIconEl(sym2.icon, sym2.tier));
-      strip.appendChild(cell2);
+      strip.appendChild(makeSpinCell(targetGrid[r][row], cellH));
     }
 
     col.appendChild(strip);
     container.appendChild(col);
-    cols.push({ col: col, strip: strip, extraCount: extraCount });
+
+    // Stop time: reel 0 at 1.2s, each next +0.4s, anticipation +0.8s
+    var stopTime = 1200 + r * 400;
+    if (anticipation[r]) stopTime += 800;
+
+    cols.push({
+      col: col,
+      strip: strip,
+      extraCount: extraCount,
+      targetOffset: extraCount * cellH, // pixels to scroll
+      stopTime: stopTime,
+      anticipation: anticipation[r],
+      stopped: false,
+    });
   }
 
-  // Wait a frame for layout
-  await sleep(30);
+  // JS-driven reel animation using requestAnimationFrame
+  var startTime = performance.now();
+  // Total animation = longest reel stopTime + 300ms for bounce settle
+  var totalDuration = cols[REELS - 1].stopTime + 300;
 
-  // Measure cell height
-  var firstCell = cols[0].strip.querySelector('.symbol-cell');
-  var cellH = firstCell ? firstCell.offsetHeight + 2 : 60;
+  // Speed: pixels per ms during full-speed phase
+  var spinSpeed = 3.0; // fast scroll
 
-  // Start scroll animation
-  for (var ri = 0; ri < REELS; ri++) {
-    var info = cols[ri];
-    var offset = -(info.extraCount * cellH);
-    info.strip.style.transform = 'translateY(0)';
-    info.strip.offsetHeight; // force reflow
-    info.strip.style.transition = 'transform ' + (0.4 + ri * 0.15) + 's cubic-bezier(.17,.67,.12,1)';
-    info.strip.style.transform = 'translateY(' + offset + 'px)';
-  }
+  return new Promise(function(resolve) {
+    function frame(now) {
+      var elapsed = now - startTime;
 
-  // Wait for all reels to stop
-  await sleep(400 + (REELS - 1) * 150 + 100);
+      for (var r = 0; r < REELS; r++) {
+        var c = cols[r];
+        if (c.stopped) continue;
 
-  // Replace with clean static grid
-  renderGrid(targetGrid);
+        if (elapsed < c.stopTime) {
+          // Still spinning: continuous scroll using modular wrapping
+          // Slow down in the last 30% of this reel's time
+          var reelProgress = elapsed / c.stopTime;
+          var speed;
+          if (reelProgress < 0.7) {
+            speed = spinSpeed;
+          } else {
+            // Decelerate
+            var decelT = (reelProgress - 0.7) / 0.3;
+            speed = spinSpeed * (1 - decelT * 0.85);
+          }
+          var scrollPx = (elapsed * speed) % (c.extraCount * cellH);
+          c.strip.style.transform = 'translateY(' + (-scrollPx) + 'px)';
+
+          // Add anticipation glow in last 40% for near-win reels
+          if (c.anticipation && reelProgress > 0.6) {
+            c.col.classList.add('anticipation');
+          }
+        } else {
+          // This reel stops now — animate to final position with bounce
+          var bounceElapsed = elapsed - c.stopTime;
+          var bounceDuration = 300; // ms for bounce settle
+          var t = Math.min(bounceElapsed / bounceDuration, 1);
+          var eased = easeOutBack(t);
+
+          // Final position: scroll to show target symbols
+          var finalOffset = c.targetOffset;
+          c.strip.style.transform = 'translateY(' + (-finalOffset * eased) + 'px)';
+
+          c.col.classList.remove('anticipation');
+
+          if (t >= 1) {
+            c.stopped = true;
+            c.strip.style.transform = 'translateY(' + (-finalOffset) + 'px)';
+          }
+        }
+      }
+
+      if (elapsed < totalDuration) {
+        requestAnimationFrame(frame);
+      } else {
+        // All done — snap to clean static grid
+        renderGrid(targetGrid);
+        resolve();
+      }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function makeSpinCell(symId, cellH) {
+  var sym = SYMBOLS[symId];
+  var cell = document.createElement('div');
+  cell.className = 'symbol-cell';
+  cell.style.height = cellH + 'px';
+  cell.style.minHeight = cellH + 'px';
+  styleCell(cell, symId);
+  cell.appendChild(createIconEl(sym.icon, sym.tier));
+  return cell;
 }
 
 async function processSpinResult(grid, isFree) {
@@ -492,16 +752,10 @@ async function processSpinResult(grid, isFree) {
   }
 
   if (totalWin > 0) {
-    state.coins += totalWin;
+    state.credits += totalWin;
     state.totalWon += totalWin;
     if (totalWin > state.stats.biggestWin) state.stats.biggestWin = totalWin;
-
-    var totalBet = state.betPerLine * NUM_LINES;
-    var winRatio = totalWin / totalBet;
-    $id('winDisplay').textContent = 'WIN: ' + formatNum(Math.floor(totalWin));
-    if (winRatio >= 10) {
-      $id('winDisplay').className = 'win-display big-win';
-    }
+    showWinAmount(totalWin);
   }
 
   if (!isFree) {
@@ -656,8 +910,11 @@ function openTreasureHunt(onComplete) {
   var totalBet = state.betPerLine * NUM_LINES;
   var totalPrize = 0;
   var multiplier = 1;
-  var chestsOpened = 0;
   var finished = false;
+
+  // Track which chests are opened individually
+  var opened = [];
+  for (var oi = 0; oi < TREASURE_HUNT_CONFIG.numChests; oi++) opened.push(false);
 
   // Generate chest contents
   var chestContents = [];
@@ -679,6 +936,12 @@ function openTreasureHunt(onComplete) {
   }
   shuffleArray(chestContents);
 
+  // Chest icon using our open-treasure-chest SVG
+  var chestIconData = ICON_DATA['open-treasure-chest'];
+  var chestMaskCSS = chestIconData
+    ? '-webkit-mask-image:url(\'data:image/svg+xml,' + chestIconData + '\');mask-image:url(\'data:image/svg+xml,' + chestIconData + '\');-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;'
+    : '';
+
   function renderTH() {
     contentEl.textContent = '';
     var wrap = document.createElement('div');
@@ -695,23 +958,26 @@ function openTreasureHunt(onComplete) {
 
     var totalDiv = document.createElement('div');
     totalDiv.className = 'treasure-total';
-    totalDiv.textContent = 'Total: ' + formatNum(Math.floor(totalPrize * multiplier)) + ' coins';
+    totalDiv.textContent = 'Total: ' + formatNum(Math.floor(totalPrize * multiplier)) + ' credits';
     wrap.appendChild(totalDiv);
 
     var grid = document.createElement('div');
     grid.className = 'treasure-grid';
     for (var ci = 0; ci < TREASURE_HUNT_CONFIG.numChests; ci++) {
       var chest = document.createElement('div');
-      chest.className = 'treasure-chest' + (ci < chestsOpened ? ' opened' : '');
+      chest.className = 'treasure-chest' + (opened[ci] ? ' opened' : '');
       chest.dataset.idx = ci;
-      if (ci < chestsOpened) {
+      if (opened[ci]) {
         var c = chestContents[ci];
         var reveal = document.createElement('div');
         reveal.className = 'chest-reveal ' + (c.type === 'skull' ? 'skull-reveal' : 'prize');
         reveal.textContent = getChestText(c);
         chest.appendChild(reveal);
       } else {
-        chest.textContent = '\uD83D\uDCE6'; // 📦
+        // Use treasure chest SVG icon instead of emoji
+        var chestIcon = document.createElement('div');
+        chestIcon.style.cssText = 'width:40px;height:40px;background:linear-gradient(135deg,#e8b44a,#ba8a2a);' + chestMaskCSS;
+        chest.appendChild(chestIcon);
       }
       grid.appendChild(chest);
     }
@@ -722,14 +988,14 @@ function openTreasureHunt(onComplete) {
       var finalDiv = document.createElement('div');
       finalDiv.className = 'treasure-total';
       finalDiv.style.fontSize = '22px';
-      finalDiv.textContent = 'TOTAL WIN: ' + formatNum(finalPrize) + ' coins';
+      finalDiv.textContent = 'TOTAL WIN: ' + formatNum(finalPrize) + ' credits';
       wrap.appendChild(finalDiv);
 
       var closeBtn = document.createElement('button');
       closeBtn.className = 'modal-close';
       closeBtn.textContent = 'COLLECT';
       closeBtn.addEventListener('click', function() {
-        state.coins += finalPrize;
+        state.credits += finalPrize;
         state.totalWon += finalPrize;
         if (finalPrize > state.stats.biggestWin) state.stats.biggestWin = finalPrize;
         modal.classList.add('hidden');
@@ -765,14 +1031,9 @@ function openTreasureHunt(onComplete) {
   }
 
   function pickChest(idx) {
-    if (finished || idx < chestsOpened) return;
-    if (idx !== chestsOpened) {
-      var tmp = chestContents[chestsOpened];
-      chestContents[chestsOpened] = chestContents[idx];
-      chestContents[idx] = tmp;
-    }
-    var prize = chestContents[chestsOpened];
-    chestsOpened++;
+    if (finished || opened[idx]) return;
+    opened[idx] = true;
+    var prize = chestContents[idx];
 
     switch (prize.type) {
       case 'coins':
@@ -799,7 +1060,9 @@ function openTreasureHunt(onComplete) {
         break;
     }
 
-    if (chestsOpened >= TREASURE_HUNT_CONFIG.numChests) finished = true;
+    var openCount = 0;
+    for (var oc = 0; oc < opened.length; oc++) { if (opened[oc]) openCount++; }
+    if (openCount >= TREASURE_HUNT_CONFIG.numChests) finished = true;
     renderTH();
   }
 
@@ -867,28 +1130,98 @@ function openWheel(onComplete) {
   var segAngle = (Math.PI * 2) / segments.length;
   var currentAngle = 0;
 
+  // Wood grain pattern: dark radial streaks + concentric rings
+  function drawWoodGrain(cx, cy, r, segStart, segEnd, baseColor) {
+    // Dark streaks radiating outward
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, segStart, segEnd);
+    ctx.closePath();
+    ctx.clip();
+
+    // Concentric ring shading
+    for (var ring = 1; ring <= 4; ring++) {
+      var ringR = r * (ring / 5);
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Radial grain streaks
+    var streakCount = 6;
+    for (var s = 0; s < streakCount; s++) {
+      var t = s / streakCount;
+      var streakAngle = segStart + (segEnd - segStart) * t + (Math.sin(s * 7.13) * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(streakAngle) * 10, cy + Math.sin(streakAngle) * 10);
+      ctx.lineTo(cx + Math.cos(streakAngle) * r, cy + Math.sin(streakAngle) * r);
+      ctx.strokeStyle = 'rgba(0,0,0,' + (0.06 + Math.abs(Math.sin(s * 3.7)) * 0.05) + ')';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+
+    // Subtle highlight near outer edge for sheen
+    var grad = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.7, 'rgba(255,255,255,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.25)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+
+    ctx.restore();
+  }
+
   function drawWheel(angle) {
     ctx.clearRect(0, 0, 280, 280);
     var cx = 140, cy = 140, r = 130;
+
+    // Outer brass rim
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    var rimGrad = ctx.createRadialGradient(cx, cy, r, cx, cy, r + 4);
+    rimGrad.addColorStop(0, '#8b6914');
+    rimGrad.addColorStop(1, '#daa520');
+    ctx.fillStyle = rimGrad;
+    ctx.fill();
+
     for (var i = 0; i < segments.length; i++) {
       var startAngle = angle + i * segAngle;
       var endAngle = startAngle + segAngle;
+
+      // Base wood color (defines segment path)
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, r, startAngle, endAngle);
       ctx.closePath();
       ctx.fillStyle = segments[i].color;
       ctx.fill();
-      ctx.strokeStyle = '#1a1a30';
+
+      // Wood grain texture overlay
+      drawWoodGrain(cx, cy, r, startAngle, endAngle, segments[i].color);
+
+      // Brass divider lines — re-define segment path
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+      ctx.closePath();
+      ctx.strokeStyle = '#daa520';
       ctx.lineWidth = 2;
       ctx.stroke();
 
+      // Label
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(startAngle + segAngle / 2);
       ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
+      var darkBgs = ['#8b5a2b', '#5c3a1a', '#a0521a'];
+      var isDark = darkBgs.indexOf(segments[i].color) >= 0;
+      ctx.fillStyle = isDark ? '#ffe5b4' : '#1a0d05';
       ctx.font = 'bold 10px Courier New';
+      ctx.shadowColor = isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.4)';
+      ctx.shadowBlur = 2;
       ctx.fillText(segments[i].label, r - 10, 4);
       ctx.restore();
     }
@@ -899,17 +1232,28 @@ function openWheel(onComplete) {
   spinBtn.addEventListener('click', function doWheelSpin() {
     spinBtn.disabled = true;
     var resultIdx = Math.floor(Math.random() * segments.length);
-    var fullRotations = 4 + Math.floor(Math.random() * 3);
+
+    // Single dramatic clockwise spin, ~8 seconds, smooth deceleration
+    var totalRotations = 7 + Math.random() * 2; // 7-9 full rotations (smoother feel)
     var targetAngle = -(resultIdx * segAngle + segAngle / 2) - Math.PI / 2;
-    var totalRotation = fullRotations * Math.PI * 2 + targetAngle - currentAngle;
-    var duration = 3000 + Math.random() * 1000;
+    var totalRotation = totalRotations * Math.PI * 2 + targetAngle - currentAngle;
+    while (totalRotation < Math.PI * 2 * 6) totalRotation += Math.PI * 2;
+
+    var duration = 8000;
     var startTime = performance.now();
     var startAngle = currentAngle;
+
+    // Smooth ease-out: quick wind-up, gradual deceleration, no abrupt crawl
+    // Custom curve: easeOutQuart feels smoother than Quint while still dramatic
+    function easeOutQuart(t) {
+      var t1 = t - 1;
+      return 1 - t1 * t1 * t1 * t1;
+    }
 
     function animate(now) {
       var elapsed = now - startTime;
       var t = Math.min(elapsed / duration, 1);
-      var eased = 1 - Math.pow(1 - t, 3);
+      var eased = easeOutQuart(t);
       currentAngle = startAngle + totalRotation * eased;
       drawWheel(currentAngle);
       if (t < 1) {
@@ -929,10 +1273,10 @@ async function resolveWheelResult(segment, onComplete) {
   switch (segment.type) {
     case 'coins':
       var amount = segment.value * totalBet;
-      state.coins += amount;
+      state.credits += amount;
       state.totalWon += amount;
       if (amount > state.stats.biggestWin) state.stats.biggestWin = amount;
-      resultEl.textContent = 'WIN: ' + formatNum(Math.floor(amount)) + ' coins!';
+      resultEl.textContent = 'WIN: ' + formatNum(Math.floor(amount)) + ' credits!';
       break;
     case 'freespins':
       if (state.freeSpins.active) {
@@ -998,7 +1342,7 @@ async function checkRandomJackpot() {
 async function showJackpotWin(tier) {
   var cfg = JACKPOT_CONFIG[tier];
   var amount = Math.floor(state.jackpots[tier]);
-  state.coins += amount;
+  state.credits += amount;
   state.totalWon += amount;
   state.jackpots[tier] = cfg.start;
   state.stats.jackpotsWon[tier]++;
@@ -1028,7 +1372,7 @@ async function showJackpotWin(tier) {
     var desc = document.createElement('p');
     desc.style.marginTop = '12px';
     desc.style.color = 'var(--text-muted)';
-    desc.textContent = 'coins added to your balance';
+    desc.textContent = 'credits added to your balance';
     wrap.appendChild(desc);
 
     contentEl.appendChild(wrap);
@@ -1077,10 +1421,6 @@ function showNotification(text, className) {
 
 // ─── Refill ──────────────────────────────────────────────────────────
 function showRefillPrompt() {
-  var now = Date.now();
-  var canRefill = (now - state.lastRefill) >= REFILL_COOLDOWN;
-  var timeLeft = Math.max(0, REFILL_COOLDOWN - (now - state.lastRefill));
-
   var modal = $id('modal');
   var contentEl = $id('modalContent');
   modal.classList.remove('hidden');
@@ -1090,29 +1430,21 @@ function showRefillPrompt() {
   wrap.className = 'refill-prompt';
 
   var h3 = document.createElement('h3');
-  h3.textContent = 'Out of Coins!';
+  h3.textContent = 'Insufficient Credits';
   wrap.appendChild(h3);
 
   var p = document.createElement('p');
-  if (canRefill) {
-    p.textContent = 'Claim your free ' + REFILL_AMOUNT + ' coins to keep playing!';
-    wrap.appendChild(p);
-    var refillBtn = document.createElement('button');
-    refillBtn.className = 'btn-refill';
-    refillBtn.textContent = 'CLAIM COINS';
-    refillBtn.addEventListener('click', function() {
-      state.coins += REFILL_AMOUNT;
-      state.lastRefill = Date.now();
-      modal.classList.add('hidden');
-      updateUI();
-      saveState();
-    });
-    wrap.appendChild(refillBtn);
-  } else {
-    var mins = Math.ceil(timeLeft / 60000);
-    p.textContent = 'Next free coins available in ' + mins + ' minutes.';
-    wrap.appendChild(p);
-  }
+  p.textContent = 'Insert a $100 bill below to add ' + formatNum(BILL_VALUE) + ' credits.';
+  wrap.appendChild(p);
+
+  var insertBtn = document.createElement('button');
+  insertBtn.className = 'btn-refill';
+  insertBtn.textContent = 'INSERT $100';
+  insertBtn.addEventListener('click', function() {
+    modal.classList.add('hidden');
+    insertBill();
+  });
+  wrap.appendChild(insertBtn);
 
   var closeBtn = document.createElement('button');
   closeBtn.className = 'modal-close';
@@ -1145,7 +1477,13 @@ function openPaytable() {
 
     var iconWrap = document.createElement('div');
     iconWrap.className = 'paytable-icon';
-    iconWrap.appendChild(createIconEl(sym.icon, sym.tier, 32));
+    iconWrap.style.background = SYMBOL_COLORS[id] || '#333';
+    iconWrap.style.display = 'flex';
+    iconWrap.style.alignItems = 'center';
+    iconWrap.style.justifyContent = 'center';
+    iconWrap.style.borderRadius = '4px';
+    iconWrap.style.border = '1px solid #d4a44a';
+    iconWrap.appendChild(createIconEl(sym.icon, sym.tier, 24));
     row.appendChild(iconWrap);
 
     var nameDiv = document.createElement('div');
@@ -1220,12 +1558,16 @@ function openStats() {
   h2.textContent = 'STATISTICS';
   contentEl.appendChild(h2);
 
+  var tier = getLoyaltyTier();
   var statsData = [
+    ['Player', state.loyalty.playerId],
+    ['Loyalty Tier', tier.label],
+    ['Total Inserted', '$' + formatNum(Math.floor(state.totalInserted / 100))],
     ['Total Spins', formatNum(state.totalSpins)],
-    ['Total Bet', formatNum(Math.floor(state.totalBet))],
-    ['Total Won', formatNum(Math.floor(state.totalWon))],
-    ['Net Profit', formatNum(Math.floor(state.totalWon - state.totalBet))],
-    ['Biggest Win', formatNum(Math.floor(state.stats.biggestWin))],
+    ['Total Wagered', formatNum(Math.floor(state.totalBet)) + ' cr'],
+    ['Total Won', formatNum(Math.floor(state.totalWon)) + ' cr'],
+    ['Net', formatNum(Math.floor(state.totalWon - state.totalBet)) + ' cr'],
+    ['Biggest Win', formatNum(Math.floor(state.stats.biggestWin)) + ' cr'],
     ['Longest Cascade', state.stats.cascadeRecord + ' chains'],
     ['Bonuses Triggered', formatNum(state.stats.bonusesTriggered)],
     ['Mini Jackpots Won', formatNum(state.stats.jackpotsWon.mini)],
@@ -1333,16 +1675,30 @@ function shuffleArray(arr) {
   }
 }
 
+// ─── Debug helpers ───────────────────────────────────────────────────
+function wireDebug(id, fn) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('click', function() {
+    try { fn(); } catch (e) { console.error('Debug ' + id + ':', e); }
+  });
+}
+
 // ─── Init ────────────────────────────────────────────────────────────
 function init() {
   loadState();
+
+  // Sync displayed credits to actual
+  displayedCredits = Math.floor(state.credits);
 
   currentGrid = generateGrid();
   renderGrid(currentGrid);
   updateUI();
 
+  // Spin button
   $id('spinBtn').addEventListener('click', doSpin);
 
+  // Bet controls
   $id('betDown').addEventListener('click', function() {
     if (spinning) return;
     betLevelIdx = Math.max(0, betLevelIdx - 1);
@@ -1358,6 +1714,12 @@ function init() {
     saveState();
   });
 
+  // Bill inserter
+  $id('billSlot').addEventListener('click', function() {
+    insertBill();
+  });
+
+  // Footer tabs
   var footerTabs = document.querySelectorAll('.footer-tab');
   for (var ti = 0; ti < footerTabs.length; ti++) {
     (function(tab) {
@@ -1372,11 +1734,65 @@ function init() {
     })(footerTabs[ti]);
   }
 
+  // Keyboard
   document.addEventListener('keydown', function(e) {
     if (e.code === 'Space' && !spinning) {
       e.preventDefault();
       doSpin();
     }
+  });
+
+  // Loyalty card insert animation on first visit
+  if (!state.loyalty.cardInserted) {
+    $id('cardOverlay').classList.remove('hidden');
+    showCardInsert();
+  } else {
+    $id('cardOverlay').classList.add('hidden');
+  }
+
+  // Debug buttons
+  wireDebug('dbgFreeSpins', function() {
+    state.freeSpins.active = true;
+    state.freeSpins.remaining = 8;
+    state.freeSpins.multiplier = FREE_SPINS_CONFIG.baseMultiplier;
+    updateUI();
+    saveState();
+  });
+  wireDebug('dbgTreasure', function() {
+    openTreasureHunt(function() { updateUI(); saveState(); });
+  });
+  wireDebug('dbgWheel', function() {
+    openWheel(function() { updateUI(); saveState(); });
+    // Auto-trigger the spin so debug doesn't require a second click
+    setTimeout(function() {
+      var btn = document.getElementById('wheelSpinBtn');
+      if (btn && !btn.disabled) btn.click();
+    }, 600);
+  });
+  wireDebug('dbgJackpotMini', function() {
+    showJackpotWin('mini');
+  });
+  wireDebug('dbgJackpotMajor', function() {
+    showJackpotWin('major');
+  });
+  wireDebug('dbgJackpotGrand', function() {
+    showJackpotWin('grand');
+  });
+  wireDebug('dbgCascade', function() {
+    var forced = generateGrid();
+    forced[0][1] = 'chest';
+    forced[1][1] = 'chest';
+    forced[2][1] = 'chest';
+    currentGrid = forced;
+    renderGrid(currentGrid);
+    processSpinResult(currentGrid, false);
+  });
+  wireDebug('dbgBigWin', function() {
+    var forced = generateGrid();
+    for (var dr = 0; dr < REELS; dr++) forced[dr][1] = 'captain';
+    currentGrid = forced;
+    renderGrid(currentGrid);
+    processSpinResult(currentGrid, false);
   });
 }
 

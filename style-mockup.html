@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tinker Tides — Style Mockups</title>
+<style>
+:root{
+  --bg:#0d0d1a;
+  --bg-card:#161628;
+  --text:#E0E8FF;
+  --text-muted:#8890a8;
+  --gold:#ffd35c;
+  --border:rgba(255,255,255,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Courier New',monospace;
+  background:var(--bg);color:var(--text);
+  padding:16px;min-height:100vh;
+}
+h1{color:var(--gold);font-size:18px;margin-bottom:8px;letter-spacing:2px}
+.subtitle{color:var(--text-muted);font-size:12px;margin-bottom:24px}
+
+.style-section{
+  margin-bottom:32px;
+  padding:16px;background:var(--bg-card);border-radius:8px;
+  border:1px solid var(--border);
+}
+.style-header{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin-bottom:12px;
+}
+.style-title{color:#39ff14;font-size:14px;letter-spacing:2px}
+.style-desc{color:var(--text-muted);font-size:11px}
+
+.symbol-row{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  gap:6px;max-width:600px;
+}
+.label-cell{
+  font-size:9px;color:var(--text-muted);text-align:center;
+  padding:4px;text-transform:uppercase;letter-spacing:1px;
+}
+
+/* ============================================== */
+/* STYLE 1: Current (baseline) — transparent gradient */
+/* ============================================== */
+.s1-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  background:#161628;border-radius:4px;
+}
+.s1-cell .icon{
+  width:80%;height:80%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+}
+.s1-cell.tier-low .icon{background:linear-gradient(135deg,#7cb87c,#4a8a4a)}
+.s1-cell.tier-mid .icon{background:linear-gradient(135deg,#6ab0e8,#3a7aba)}
+.s1-cell.tier-high .icon{background:linear-gradient(135deg,#e8b44a,#ba8a2a)}
+.s1-cell.tier-wild .icon{background:linear-gradient(135deg,#ffd700,#daa520)}
+.s1-cell.tier-scatter .icon{background:linear-gradient(135deg,#c084fc,#8b5cf6)}
+.s1-cell.tier-bonus .icon{background:linear-gradient(135deg,#f87171,#dc2626)}
+
+/* ============================================== */
+/* STYLE 2: Per-symbol solid tiles + bevel + frame */
+/* ============================================== */
+.s2-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:4px;
+  border:2px solid #b8860b;
+  box-shadow:
+    inset 0 2px 4px rgba(255,255,255,.2),
+    inset 0 -2px 4px rgba(0,0,0,.3),
+    0 0 0 1px rgba(0,0,0,.5);
+  position:relative;overflow:hidden;
+}
+.s2-cell .icon{
+  width:70%;height:70%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:#fff;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));
+}
+
+/* ============================================== */
+/* STYLE 3: Per-symbol solid + glossy shine */
+/* ============================================== */
+.s3-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;
+  border:2px solid rgba(255,215,0,.4);
+  position:relative;overflow:hidden;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.3);
+}
+.s3-cell::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,.25),rgba(255,255,255,0));
+  pointer-events:none;
+}
+.s3-cell::after{
+  content:'';position:absolute;inset:0;border-radius:6px;
+  box-shadow:inset 0 -6px 12px rgba(0,0,0,.4);
+  pointer-events:none;
+}
+.s3-cell .icon{
+  width:72%;height:72%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:#fff;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));
+  position:relative;z-index:1;
+}
+
+/* ============================================== */
+/* STYLE 4: Textured / weathered (parchment + woodgrain) */
+/* ============================================== */
+.s4-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:3px;
+  border:2px solid #5c3a1a;
+  position:relative;overflow:hidden;
+  box-shadow:inset 0 0 20px rgba(0,0,0,.3);
+}
+.s4-cell::before{
+  content:'';position:absolute;inset:0;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.05) 0px,rgba(0,0,0,.05) 1px,
+      transparent 1px,transparent 4px),
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.03) 0px,rgba(0,0,0,.03) 1px,
+      transparent 1px,transparent 6px);
+  pointer-events:none;
+}
+.s4-cell .icon{
+  width:72%;height:72%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:#1a0f05;
+  filter:drop-shadow(0 1px 0 rgba(255,255,255,.2));
+  position:relative;z-index:1;
+}
+
+/* ============================================== */
+/* STYLE 5: Bold flat with heavy gold frame (modern) */
+/* ============================================== */
+.s5-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:0;
+  border:3px solid #d4a44a;
+  position:relative;overflow:hidden;
+  outline:1px solid #5c3a1a;
+}
+.s5-cell .icon{
+  width:75%;height:75%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:#fff;
+}
+
+/* ============================================== */
+/* STYLE 6: Radial vignette + per-symbol color */
+/* ============================================== */
+.s6-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  border:1px solid rgba(255,215,0,.3);
+  position:relative;overflow:hidden;
+}
+.s6-cell::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,transparent 30%,rgba(0,0,0,.4) 100%);
+  pointer-events:none;
+}
+.s6-cell .icon{
+  width:75%;height:75%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:radial-gradient(circle,#fff,#ddd);
+  filter:drop-shadow(0 0 8px rgba(255,215,0,.4));
+  position:relative;z-index:1;
+}
+
+/* ============================================== */
+/* STYLE 7: Vignette + heavy gold frame + special icons */
+/* ============================================== */
+.s7-cell{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:0;
+  border:3px solid #d4a44a;
+  outline:1px solid #5c3a1a;
+  position:relative;
+  /* overflow NOT hidden — allows drop-shadow glows to extend beyond icon bounds */
+}
+.s7-cell::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,transparent 30%,rgba(0,0,0,.45) 100%);
+  pointer-events:none;
+}
+.s7-cell .icon{
+  width:75%;height:75%;
+  -webkit-mask-size:contain;mask-size:contain;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center;
+  background:radial-gradient(circle,#fff,#ddd);
+  filter:drop-shadow(0 0 8px rgba(255,215,0,.4));
+  position:relative;z-index:1;
+}
+/* Special: Wild (coins) — dark background, yellow icon, BIG glow + pulse */
+.s7-cell.special-wild{
+  background:#1a1208 !important;
+  position:relative;
+}
+.s7-cell.special-wild::before{
+  content:'WILD';
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:2.4em;font-weight:900;
+  letter-spacing:-0.04em;
+  color:rgba(255,200,0,.32);
+  text-shadow:0 0 8px rgba(255,180,0,.4);
+  transform:scaleY(1.5);
+  pointer-events:none;z-index:1;
+  line-height:1;
+  overflow:hidden;
+}
+.s7-cell.special-wild .icon{
+  width:55% !important;
+  height:55% !important;
+}
+.s7-cell.special-wild::after{
+  content:'';position:absolute;inset:-4px;
+  background:radial-gradient(circle at center,
+    rgba(255,215,0,.5) 0%,
+    rgba(255,180,0,.3) 30%,
+    transparent 70%);
+  pointer-events:none;z-index:0;
+  animation:coinHaloPulse 1.2s ease infinite alternate;
+}
+@keyframes coinHaloPulse{
+  from{opacity:.5;transform:scale(.9)}
+  to{opacity:1;transform:scale(1.15)}
+}
+.s7-cell.special-wild .icon{
+  background:radial-gradient(circle,#fff5a0,#ffd700 40%,#ff9500);
+  filter:drop-shadow(0 0 10px rgba(255,215,0,1))
+         drop-shadow(0 0 20px rgba(255,200,0,.9))
+         drop-shadow(0 0 32px rgba(255,180,0,.7));
+  animation:coinPulse 1.2s ease infinite alternate;
+  position:relative;z-index:2;
+}
+@keyframes coinPulse{
+  from{
+    filter:drop-shadow(0 0 8px rgba(255,215,0,.8))
+           drop-shadow(0 0 16px rgba(255,200,0,.6))
+           drop-shadow(0 0 28px rgba(255,180,0,.4));
+    transform:scale(1);
+  }
+  to{
+    filter:drop-shadow(0 0 16px rgba(255,235,100,1))
+           drop-shadow(0 0 36px rgba(255,200,0,1))
+           drop-shadow(0 0 60px rgba(255,180,0,.85))
+           drop-shadow(0 0 80px rgba(255,160,0,.5));
+    transform:scale(1.12);
+  }
+}
+/* Special: Chest — slightly brighter background, darker icon */
+.s7-cell.special-chest{
+  background:#daa520 !important;
+}
+.s7-cell.special-chest .icon{
+  background:radial-gradient(circle,#1f0d02,#0a0500);
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.25));
+}
+
+/* Special: Skull & Captain — constant silver glow halo (no pulse) */
+.s7-cell.special-skull::after,
+.s7-cell.special-captain::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:95%;height:95%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at center,
+    rgba(240,248,255,.6) 0%,
+    rgba(200,220,255,.3) 30%,
+    rgba(180,200,255,.12) 55%,
+    transparent 75%);
+  pointer-events:none;
+  z-index:0;
+  border-radius:50%;
+}
+.s7-cell.special-skull .icon,
+.s7-cell.special-captain .icon{
+  position:relative;z-index:1;
+}
+
+/* Special: Bonus (ship-wheel) — wood textured background, small wheel + BONUS text */
+.s7-cell.special-bonus{
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.10) 0,rgba(0,0,0,.10) 1px,
+      transparent 1px,transparent 4px),
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 1px,
+      transparent 1px,transparent 9px),
+    radial-gradient(ellipse at 30% 40%, #a06438 0%, #7d4a26 50%, #4a2e15 100%) !important;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.5);
+  flex-direction:column;
+  justify-content:flex-start;
+  padding-top:8%;
+}
+.s7-cell.special-bonus .icon{
+  width:55% !important;
+  height:55% !important;
+  animation:bonusWheelSpin 7s ease-in-out infinite;
+  transform-origin:center;
+  background:radial-gradient(circle,#fff8dc,#daa520) !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
+}
+.s7-cell.special-bonus::after{
+  content:'BONUS';
+  position:absolute;
+  left:6%;right:6%;bottom:8%;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:0.9em;
+  letter-spacing:0.06em;
+  color:#daa520;
+  -webkit-text-stroke:1.5px #000;
+  paint-order:stroke fill;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+  transform:scaleX(1.15);
+  pointer-events:none;
+}
+@keyframes bonusWheelSpin{
+  0%   {transform:rotate(0deg)}
+  35%  {transform:rotate(-360deg)}
+  50%  {transform:rotate(-360deg)}        /* pause */
+  85%  {transform:rotate(0deg)}
+  100% {transform:rotate(0deg)}            /* pause */
+}
+
+/* Special: Scatter (treasure map) — INVERTED: dark leather background, parchment icon */
+.s7-cell.special-scatter{
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.12) 0,rgba(0,0,0,.12) 1px,
+      transparent 1px,transparent 6px),
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.08) 0,rgba(0,0,0,.08) 1px,
+      transparent 1px,transparent 11px),
+    radial-gradient(ellipse at 35% 30%, #5c3a1a 0%, #3d2410 60%, #1f1208 100%) !important;
+  box-shadow:inset 0 0 16px rgba(0,0,0,.6);
+}
+.s7-cell.special-scatter::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:90%;height:90%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at center,
+    rgba(255,240,180,.95) 0%,
+    rgba(255,220,140,.6) 20%,
+    rgba(245,200,120,.25) 45%,
+    transparent 70%);
+  animation:scatterHaloPulse 2s ease-in-out infinite alternate;
+  pointer-events:none;
+  z-index:0;
+  border-radius:50%;
+}
+@keyframes scatterHaloPulse{
+  from{opacity:.35;transform:translate(-50%,-50%) scale(.7)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1.25)}
+}
+.s7-cell.special-scatter .icon{
+  background:radial-gradient(circle,#f5e3b5,#d4b683 70%,#b89260) !important;
+  position:relative;z-index:1;
+}
+
+/* Reel preview — full 5x3 grid in each style */
+.preview-section{margin-top:24px}
+.preview-title{color:var(--gold);font-size:13px;margin-bottom:8px}
+.reel-preview{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  gap:0;max-width:400px;
+  background:#0a0a12;padding:4px;border-radius:6px;
+  border:2px solid #2a2a3a;
+}
+.all-symbols-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  gap:8px;max-width:600px;
+}
+.all-symbols-grid .sym-wrap{
+  display:flex;flex-direction:column;gap:4px;align-items:center;
+}
+.all-symbols-grid .sym-name{
+  font-size:9px;color:var(--text-muted);text-align:center;
+  text-transform:uppercase;letter-spacing:1px;
+}
+.all-symbols-grid .sym-tier{
+  font-size:8px;color:var(--gold);opacity:.7;
+}
+</style>
+</head>
+<body>
+
+<h1>TINKER TIDES — Symbol Style Mockups</h1>
+<div class="subtitle">7 symbols shown across 6 styles. Pick your favorite (or mix and match).</div>
+
+<!-- Style 1: Current -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 1 — Current (baseline)</div>
+    <div class="style-desc">Transparent gradient on dark cell</div>
+  </div>
+  <div class="symbol-row" id="row1"></div>
+</div>
+
+<!-- Style 2: Per-symbol solid tiles + bevel + frame -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 2 — Solid color tiles + bevel + gold frame</div>
+    <div class="style-desc">Each symbol has its own background color, white icon, beveled edges, gold frame</div>
+  </div>
+  <div class="symbol-row" id="row2"></div>
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview2"></div>
+  </div>
+</div>
+
+<!-- Style 3: Per-symbol solid + glossy shine -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 3 — Solid color tiles + glossy shine</div>
+    <div class="style-desc">Same as Style 2 but with a glassy highlight overlay (more "plastic" feel)</div>
+  </div>
+  <div class="symbol-row" id="row3"></div>
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview3"></div>
+  </div>
+</div>
+
+<!-- Style 4: Textured / weathered -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 4 — Weathered woodgrain + dark icon</div>
+    <div class="style-desc">Subtle hatching texture, dark stamped icon — like old painted wood</div>
+  </div>
+  <div class="symbol-row" id="row4"></div>
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview4"></div>
+  </div>
+</div>
+
+<!-- Style 5: Modern flat -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 5 — Modern flat with heavy gold frame</div>
+    <div class="style-desc">Pure flat color, sharp gold border — clean modern slot look</div>
+  </div>
+  <div class="symbol-row" id="row5"></div>
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview5"></div>
+  </div>
+</div>
+
+<!-- Style 6: Radial vignette -->
+<div class="style-section">
+  <div class="style-header">
+    <div class="style-title">STYLE 6 — Radial vignette + glowing icon</div>
+    <div class="style-desc">Color radiates from center, dark edges, white icon glows softly</div>
+  </div>
+  <div class="symbol-row" id="row6"></div>
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview6"></div>
+  </div>
+</div>
+
+<!-- Style 7: Vignette + heavy gold frame + special icons -->
+<div class="style-section" style="border:2px solid var(--gold)">
+  <div class="style-header">
+    <div class="style-title" style="color:var(--gold)">STYLE 7 — Vignette + heavy gold frame + special icons</div>
+    <div class="style-desc">Style 6's vignette + Style 5's heavy gold frame. Wild=yellow coins on dark with pulse glow. Chest=dark brown icon.</div>
+  </div>
+  <div class="symbol-row" id="row7"></div>
+
+  <div class="preview-section">
+    <div class="preview-title">All 14 symbols (full set):</div>
+    <div class="all-symbols-grid" id="allSymbols7"></div>
+  </div>
+
+  <div class="preview-section">
+    <div class="preview-title">Full 5×3 reel preview:</div>
+    <div class="reel-preview" id="preview7"></div>
+  </div>
+</div>
+
+<script src="icon-data.js"></script>
+<script>
+// Per-symbol colors (used by styles 2-6)
+const SYMBOL_COLORS = {
+  compass:  '#00897b', // teal
+  anchor:   '#1565c0', // navy blue
+  rum:      '#2e7d32', // forest green
+  cannon:   '#4527a0', // deep purple (was hat's)
+  parrot:   '#b71c1c', // deep red (matches swords)
+  ship:     '#37474f', // slate
+  hat:      '#37474f', // slate (matches ship)
+  swords:   '#b71c1c', // deep red
+  chest:    '#b8860b', // gold
+  skull:    '#263238', // near-black
+  captain:  '#263238', // near-black (matches skull)
+  wild:     '#ffd700', // bright gold
+  scatter:  '#7b1fa2', // purple
+  bonus:    '#c62828', // red
+};
+
+// Symbol icon mapping
+const SYMBOLS_DEMO = [
+  { id: 'compass',  icon: 'compass',              tier: 'low',     name: 'Compass' },
+  { id: 'parrot',   icon: 'parrot-head',          tier: 'mid',     name: 'Parrot' },
+  { id: 'hat',      icon: 'pirate-hat',           tier: 'mid',     name: 'Hat' },
+  { id: 'chest',    icon: 'open-treasure-chest',  tier: 'high',    name: 'Chest' },
+  { id: 'captain',  icon: 'pirate-captain',       tier: 'high',    name: 'Captain' },
+  { id: 'wild',     icon: 'two-coins',            tier: 'wild',    name: 'Wild' },
+  { id: 'scatter',  icon: 'treasure-map',         tier: 'scatter', name: 'Scatter' },
+];
+
+const PREVIEW_GRID = [
+  ['captain', 'parrot', 'chest', 'wild', 'compass'],
+  ['hat', 'skull', 'scatter', 'rum', 'parrot'],
+  ['anchor', 'chest', 'wild', 'swords', 'hat'],
+];
+
+const ALL_SYMBOLS = {
+  compass:  { icon: 'compass',              tier: 'low' },
+  anchor:   { icon: 'anchor',               tier: 'low' },
+  rum:      { icon: 'drink-me',             tier: 'low' },
+  cannon:   { icon: 'cannon',               tier: 'low' },
+  parrot:   { icon: 'parrot-head',          tier: 'mid' },
+  ship:     { icon: 'pirate-flag',          tier: 'mid' },
+  hat:      { icon: 'pirate-hat',           tier: 'mid' },
+  swords:   { icon: 'crossed-swords',       tier: 'mid' },
+  chest:    { icon: 'open-treasure-chest',  tier: 'high' },
+  skull:    { icon: 'skull-crossed-bones',  tier: 'high' },
+  captain:  { icon: 'pirate-captain',       tier: 'high' },
+  wild:     { icon: 'two-coins',            tier: 'wild' },
+  scatter:  { icon: 'treasure-map',         tier: 'scatter' },
+  bonus:    { icon: 'ship-wheel',           tier: 'bonus' },
+};
+
+function makeIcon(slug) {
+  const data = ICON_DATA[slug];
+  const el = document.createElement('div');
+  el.className = 'icon';
+  if (data) {
+    const url = "url('data:image/svg+xml," + data + "')";
+    el.style.webkitMaskImage = url;
+    el.style.maskImage = url;
+  }
+  return el;
+}
+
+function applySpecial(cell, symId, styleClass) {
+  // Style 7 has special icon treatments for wild, chest, bonus, scatter, skull, captain
+  if (styleClass === 's7-cell') {
+    if (symId === 'wild') cell.classList.add('special-wild');
+    if (symId === 'chest') cell.classList.add('special-chest');
+    if (symId === 'bonus') cell.classList.add('special-bonus');
+    if (symId === 'scatter') cell.classList.add('special-scatter');
+    if (symId === 'skull') cell.classList.add('special-skull');
+    if (symId === 'captain') cell.classList.add('special-captain');
+  }
+}
+
+function buildRow(rowId, styleClass, useTiers) {
+  const row = document.getElementById(rowId);
+  // Labels first
+  for (const sym of SYMBOLS_DEMO) {
+    const label = document.createElement('div');
+    label.className = 'label-cell';
+    label.textContent = sym.name;
+    row.appendChild(label);
+  }
+  // Cells
+  for (const sym of SYMBOLS_DEMO) {
+    const cell = document.createElement('div');
+    cell.className = styleClass + ' tier-' + sym.tier;
+    if (!useTiers) {
+      cell.style.background = SYMBOL_COLORS[sym.id];
+    }
+    applySpecial(cell, sym.id, styleClass);
+    cell.appendChild(makeIcon(sym.icon));
+    row.appendChild(cell);
+  }
+}
+
+function buildPreview(previewId, styleClass) {
+  const grid = document.getElementById(previewId);
+  // Build column-by-column (5 reels × 3 rows)
+  for (let row = 0; row < 3; row++) {
+    for (let r = 0; r < 5; r++) {
+      const symId = PREVIEW_GRID[row][r];
+      const sym = ALL_SYMBOLS[symId];
+      const cell = document.createElement('div');
+      cell.className = styleClass + ' tier-' + sym.tier;
+      cell.style.background = SYMBOL_COLORS[symId];
+      applySpecial(cell, symId, styleClass);
+      cell.appendChild(makeIcon(sym.icon));
+      grid.appendChild(cell);
+    }
+  }
+}
+
+const SYMBOL_NAMES = {
+  compass: 'Compass', anchor: 'Anchor', rum: 'Rum', cannon: 'Cannon',
+  parrot: 'Parrot', ship: 'Ship', hat: 'Hat', swords: 'Swords',
+  chest: 'Chest', skull: 'Skull', captain: 'Captain',
+  wild: 'Wild', scatter: 'Scatter', bonus: 'Bonus',
+};
+
+const SYMBOL_ORDER = [
+  'compass', 'anchor', 'rum', 'cannon',          // low (4)
+  'parrot', 'ship', 'hat', 'swords',             // mid (4)
+  'chest', 'skull', 'captain',                   // high (3)
+  'wild', 'scatter', 'bonus',                    // special (3)
+];
+
+function buildAllSymbols(gridId, styleClass) {
+  const grid = document.getElementById(gridId);
+  for (const symId of SYMBOL_ORDER) {
+    const sym = ALL_SYMBOLS[symId];
+    const wrap = document.createElement('div');
+    wrap.className = 'sym-wrap';
+
+    const cell = document.createElement('div');
+    cell.className = styleClass + ' tier-' + sym.tier;
+    cell.style.background = SYMBOL_COLORS[symId];
+    cell.style.width = '70px';
+    cell.style.height = '70px';
+    applySpecial(cell, symId, styleClass);
+    cell.appendChild(makeIcon(sym.icon));
+    wrap.appendChild(cell);
+
+    const name = document.createElement('div');
+    name.className = 'sym-name';
+    name.textContent = SYMBOL_NAMES[symId];
+    wrap.appendChild(name);
+
+    const tier = document.createElement('div');
+    tier.className = 'sym-tier';
+    tier.textContent = sym.tier.toUpperCase();
+    wrap.appendChild(tier);
+
+    grid.appendChild(wrap);
+  }
+}
+
+// Style 1 uses tier-based gradient (no per-symbol color)
+buildRow('row1', 's1-cell', true);
+
+// Styles 2-6 use per-symbol colors
+buildRow('row2', 's2-cell', false);
+buildPreview('preview2', 's2-cell');
+
+buildRow('row3', 's3-cell', false);
+buildPreview('preview3', 's3-cell');
+
+buildRow('row4', 's4-cell', false);
+buildPreview('preview4', 's4-cell');
+
+buildRow('row5', 's5-cell', false);
+buildPreview('preview5', 's5-cell');
+
+buildRow('row6', 's6-cell', false);
+buildPreview('preview6', 's6-cell');
+
+buildRow('row7', 's7-cell', false);
+buildAllSymbols('allSymbols7', 's7-cell');
+buildPreview('preview7', 's7-cell');
+</script>
+
+</body>
+</html>

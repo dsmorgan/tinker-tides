@@ -30,11 +30,20 @@ body{
 .header{
   position:fixed;top:0;left:0;right:0;z-index:100;
   background:linear-gradient(180deg,#0d0d1a 80%,transparent);
-  padding:8px 16px;display:flex;align-items:center;justify-content:space-between;
+  padding:6px 12px;display:flex;align-items:center;justify-content:space-between;
   height:44px;
 }
-.header h1{font-size:18px;color:var(--accent);letter-spacing:2px}
-.header .coins{font-size:14px;color:var(--gold)}
+.header h1{font-size:16px;color:var(--accent);letter-spacing:2px}
+.loyalty-badge{
+  display:flex;align-items:center;gap:6px;font-size:11px;
+  padding:3px 8px;border-radius:12px;
+  border:1px solid var(--border);background:var(--bg-card);
+}
+.loyalty-badge .tier-dot{
+  width:8px;height:8px;border-radius:50%;
+}
+.loyalty-badge .tier-label{font-weight:bold}
+.loyalty-badge .player-id{color:var(--text-muted);font-size:10px}
 
 /* Main container */
 .game-wrap{
@@ -59,44 +68,197 @@ body{
 
 /* Reel grid */
 .reel-frame{
-  position:relative;width:100%;aspect-ratio:5/3.2;
+  position:relative;width:100%;aspect-ratio:5/3;
   background:var(--bg-card);border-radius:var(--radius);
   border:2px solid var(--border);overflow:hidden;
 }
 .reel-grid{
   display:grid;grid-template-columns:repeat(5,1fr);
-  width:100%;height:100%;gap:2px;padding:2px;
+  width:100%;height:100%;gap:0;padding:0;
 }
 .reel-col{
   position:relative;overflow:hidden;
-  display:flex;flex-direction:column;
 }
 .reel-strip{
   display:flex;flex-direction:column;
-  transition:transform 0.3s cubic-bezier(.17,.67,.12,1);
-}
-.reel-col.spinning .reel-strip{
-  transition:none;
 }
 .symbol-cell{
   position:relative;
-  width:100%;aspect-ratio:1;
   display:flex;align-items:center;justify-content:center;
-  border-radius:4px;
+  border-radius:0;
+  border:3px solid #d4a44a;
+  outline:1px solid #5c3a1a;
+  flex-shrink:0;
+}
+.symbol-cell::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at center,transparent 30%,rgba(0,0,0,.45) 100%);
+  pointer-events:none;
+  z-index:0;
 }
 .symbol-cell .sym-icon{
-  width:80%;height:80%;
+  width:70%;height:70%;
   -webkit-mask-size:contain;mask-size:contain;
   -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
   -webkit-mask-position:center;mask-position:center;
+  background:radial-gradient(circle,#fff,#ddd);
+  position:relative;z-index:1;
 }
-/* Symbol tints by tier */
-.sym-icon.tier-low{background:linear-gradient(135deg,#7cb87c,#4a8a4a)}
-.sym-icon.tier-mid{background:linear-gradient(135deg,#6ab0e8,#3a7aba)}
-.sym-icon.tier-high{background:linear-gradient(135deg,#e8b44a,#ba8a2a)}
-.sym-icon.tier-wild{background:linear-gradient(135deg,#ffd700,#daa520)}
-.sym-icon.tier-scatter{background:linear-gradient(135deg,#c084fc,#8b5cf6)}
-.sym-icon.tier-bonus{background:linear-gradient(135deg,#f87171,#dc2626)}
+
+/* === Per-symbol special treatments === */
+
+/* WILD — dark bg + pulsing yellow halo + WILD watermark + glowing coins */
+.symbol-cell.sym-wild{
+  background:#1a1208 !important;
+}
+.symbol-cell.sym-wild::after{
+  content:'WILD';
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:2.4em;font-weight:900;
+  letter-spacing:-0.04em;
+  color:rgba(255,200,0,.32);
+  text-shadow:0 0 8px rgba(255,180,0,.4);
+  transform:scaleY(1.5);
+  pointer-events:none;z-index:2;
+  line-height:1;
+  overflow:hidden;
+}
+.symbol-cell.sym-wild .sym-icon{
+  width:55% !important;height:55% !important;
+  background:radial-gradient(circle,#fff5a0,#ffd700 40%,#ff9500) !important;
+  filter:drop-shadow(0 0 10px rgba(255,215,0,1))
+         drop-shadow(0 0 20px rgba(255,200,0,.9));
+  animation:coinPulse 1.2s ease infinite alternate;
+  z-index:3;
+}
+@keyframes coinPulse{
+  from{
+    filter:drop-shadow(0 0 8px rgba(255,215,0,.8))
+           drop-shadow(0 0 16px rgba(255,200,0,.6));
+    transform:scale(1);
+  }
+  to{
+    filter:drop-shadow(0 0 16px rgba(255,235,100,1))
+           drop-shadow(0 0 36px rgba(255,200,0,1));
+    transform:scale(1.12);
+  }
+}
+
+/* SCATTER (treasure map) — dark leather + pulsing warm halo + parchment icon */
+.symbol-cell.sym-scatter{
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.12) 0,rgba(0,0,0,.12) 1px,
+      transparent 1px,transparent 6px),
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.08) 0,rgba(0,0,0,.08) 1px,
+      transparent 1px,transparent 11px),
+    radial-gradient(ellipse at 35% 30%, #5c3a1a 0%, #3d2410 60%, #1f1208 100%) !important;
+  box-shadow:inset 0 0 16px rgba(0,0,0,.6);
+}
+.symbol-cell.sym-scatter::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:90%;height:90%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at center,
+    rgba(255,240,180,.95) 0%,
+    rgba(255,220,140,.6) 20%,
+    rgba(245,200,120,.25) 45%,
+    transparent 70%);
+  animation:scatterHaloPulse 2s ease-in-out infinite alternate;
+  pointer-events:none;
+  z-index:0;
+  border-radius:50%;
+}
+@keyframes scatterHaloPulse{
+  from{opacity:.35;transform:translate(-50%,-50%) scale(.7)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1.25)}
+}
+.symbol-cell.sym-scatter .sym-icon{
+  background:radial-gradient(circle,#f5e3b5,#d4b683 70%,#b89260) !important;
+  z-index:1;
+}
+
+/* CHEST — bright gold bg + dark brown icon */
+.symbol-cell.sym-chest{
+  background:#daa520 !important;
+}
+.symbol-cell.sym-chest .sym-icon{
+  background:radial-gradient(circle,#1f0d02,#0a0500) !important;
+  filter:drop-shadow(0 1px 1px rgba(255,255,255,.25));
+}
+
+/* SKULL & CAPTAIN — constant silver halo */
+.symbol-cell.sym-skull,
+.symbol-cell.sym-captain{
+  background:#263238 !important;
+}
+.symbol-cell.sym-skull::after,
+.symbol-cell.sym-captain::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:95%;height:95%;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at center,
+    rgba(240,248,255,.6) 0%,
+    rgba(200,220,255,.3) 30%,
+    rgba(180,200,255,.12) 55%,
+    transparent 75%);
+  pointer-events:none;
+  z-index:0;
+  border-radius:50%;
+}
+
+/* BONUS (ship-wheel) — wood textured bg + small spinning wheel + BONUS text */
+.symbol-cell.sym-bonus{
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.10) 0,rgba(0,0,0,.10) 1px,
+      transparent 1px,transparent 4px),
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 1px,
+      transparent 1px,transparent 9px),
+    radial-gradient(ellipse at 30% 40%, #a06438 0%, #7d4a26 50%, #4a2e15 100%) !important;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.5);
+  flex-direction:column;
+  justify-content:flex-start;
+  padding-top:6%;
+}
+.symbol-cell.sym-bonus .sym-icon{
+  width:48% !important;height:48% !important;
+  background:radial-gradient(circle,#fff8dc,#daa520) !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
+  animation:bonusWheelSpin 7s ease-in-out infinite;
+  transform-origin:center;
+  z-index:1;
+}
+.symbol-cell.sym-bonus::after{
+  content:'BONUS';
+  position:absolute;
+  left:6%;right:6%;bottom:6%;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:0.85em;
+  letter-spacing:0.06em;
+  color:#daa520;
+  -webkit-text-stroke:1.5px #000;
+  paint-order:stroke fill;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+  transform:scaleX(1.15);
+  pointer-events:none;
+  z-index:2;
+}
+@keyframes bonusWheelSpin{
+  0%   {transform:rotate(0deg)}
+  35%  {transform:rotate(-360deg)}
+  50%  {transform:rotate(-360deg)}
+  85%  {transform:rotate(0deg)}
+  100% {transform:rotate(0deg)}
+}
 
 /* Win highlight */
 .symbol-cell.win-highlight{
@@ -131,15 +293,15 @@ body{
 }
 .payline-overlay svg{width:100%;height:100%}
 
-/* Win display */
+/* Win display (kept for notification text) */
 .win-display{
-  width:100%;text-align:center;padding:4px;
-  font-size:16px;font-weight:bold;min-height:28px;
+  width:100%;text-align:center;padding:2px;
+  font-size:14px;font-weight:bold;min-height:20px;
   color:var(--gold);
 }
 .win-display.big-win{
   animation:bigWinPulse 0.5s ease infinite alternate;
-  font-size:22px;
+  font-size:18px;
 }
 @keyframes bigWinPulse{
   from{text-shadow:0 0 8px var(--gold)}
@@ -285,7 +447,20 @@ body{
 }
 
 /* === WHEEL OF FORTUNE === */
-.wheel-container{text-align:center;position:relative}
+.wheel-container{
+  text-align:center;position:relative;
+  padding:16px;border-radius:8px;
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.04) 0,rgba(0,0,0,.04) 1px,
+      transparent 1px,transparent 5px),
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.03) 0,rgba(0,0,0,.03) 1px,
+      transparent 1px,transparent 7px),
+    linear-gradient(135deg,#3d2817,#1f140a);
+  box-shadow:inset 0 0 30px rgba(0,0,0,.5);
+  border:2px solid #8b6914;
+}
 .wheel-container h2{color:var(--gold);font-size:20px;margin-bottom:8px}
 .wheel-wrap{
   position:relative;width:280px;height:280px;margin:16px auto;
@@ -393,6 +568,172 @@ body{
 }
 .btn-reset:hover{background:rgba(255,68,68,.1)}
 
+/* === LED CREDIT DISPLAY === */
+.credit-panel{
+  width:100%;display:flex;gap:8px;align-items:stretch;
+}
+.credit-box{
+  flex:1;background:#0a0a12;border:2px solid #2a2a3a;border-radius:var(--radius);
+  padding:6px 12px;text-align:center;position:relative;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.5);
+}
+.credit-box .credit-label{
+  font-size:9px;text-transform:uppercase;letter-spacing:2px;
+  color:var(--text-muted);display:block;margin-bottom:2px;
+}
+.credit-box .credit-value{
+  font-size:24px;font-weight:bold;letter-spacing:2px;
+  color:#ff3333;
+  text-shadow:0 0 8px rgba(255,51,51,.5),0 0 16px rgba(255,51,51,.2);
+  font-family:'Courier New',monospace;
+}
+.credit-box.win-box .credit-value{
+  color:var(--gold);
+  text-shadow:0 0 8px rgba(255,211,92,.5),0 0 16px rgba(255,211,92,.2);
+}
+.credit-box .credit-value.ticking{
+  animation:creditTick 0.05s steps(1) infinite;
+}
+@keyframes creditTick{
+  50%{opacity:.7}
+}
+.credit-box .credit-value.win-flash{
+  animation:winFlash 0.8s ease infinite alternate;
+}
+@keyframes winFlash{
+  from{opacity:1;text-shadow:0 0 8px rgba(255,211,92,.5)}
+  to{opacity:.6;text-shadow:0 0 20px rgba(255,211,92,.8),0 0 40px rgba(255,211,92,.3)}
+}
+
+/* Near-win reel anticipation */
+.reel-col.anticipation .reel-strip{
+  transition:transform 1.2s cubic-bezier(.17,.67,.05,1) !important;
+}
+.reel-col.anticipation::after{
+  content:'';position:absolute;inset:0;z-index:5;pointer-events:none;
+  border:2px solid var(--gold);border-radius:4px;
+  animation:reelAnticipate 0.4s ease infinite alternate;
+}
+@keyframes reelAnticipate{
+  from{box-shadow:inset 0 0 8px rgba(255,215,0,.2),0 0 8px rgba(255,215,0,.2)}
+  to{box-shadow:inset 0 0 16px rgba(255,215,0,.5),0 0 16px rgba(255,215,0,.5)}
+}
+
+/* === BILL INSERTER === */
+.bill-inserter{
+  width:100%;position:relative;overflow:hidden;
+}
+.bill-slot{
+  width:100%;height:48px;
+  background:linear-gradient(180deg,#1a1a30,#0d0d1a);
+  border:2px solid #2a2a3a;border-radius:var(--radius);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  gap:8px;transition:all .2s;position:relative;overflow:hidden;
+}
+.bill-slot:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(57,255,20,.15)}
+.bill-slot-slit{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:70%;height:4px;background:#333;border-radius:0 0 4px 4px;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.8);
+}
+.bill-slot-label{
+  font-size:13px;color:var(--accent);font-weight:bold;letter-spacing:1px;
+  z-index:1;
+}
+.bill-slot-icon{font-size:18px;z-index:1}
+.bill-anim{
+  position:absolute;left:50%;bottom:-80px;transform:translateX(-50%);
+  width:60%;height:70px;
+  background:linear-gradient(135deg,#85bb65,#5a8a42);
+  border:2px solid #4a7a32;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:bold;color:#1a3a0a;
+  z-index:2;pointer-events:none;
+}
+.bill-anim.phase-slide{
+  transition:transform 0.6s cubic-bezier(.17,.67,.12,1);
+  transform:translateX(-50%) translateY(-120px);
+}
+.bill-anim.phase-eat{
+  transition:transform 0.5s ease-in;
+  transform:translateX(-50%) translateY(-160px);
+  opacity:0;
+}
+
+/* === LOYALTY CARD INSERT === */
+.card-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;
+  background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;
+  flex-direction:column;
+}
+.card-overlay.hidden{display:none}
+.card-reader-slot{
+  width:220px;height:12px;background:#333;border-radius:6px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.8),0 0 20px rgba(0,0,0,.5);
+  margin-bottom:0;position:relative;z-index:2;
+}
+.loyalty-card{
+  width:200px;height:120px;border-radius:10px;
+  background:linear-gradient(135deg,#1a2a4a,#0d1a30);
+  border:2px solid #3a4a6a;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;padding:12px;
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
+  transform:translateY(300px);
+  transition:transform 0.8s cubic-bezier(.17,.67,.12,1);
+  position:relative;z-index:1;
+}
+.loyalty-card.phase-rise{
+  transform:translateY(10px);
+}
+.loyalty-card.phase-insert{
+  transition:transform 0.5s ease-in;
+  transform:translateY(-60px);
+}
+.loyalty-card .card-logo{font-size:24px;margin-bottom:4px}
+.loyalty-card .card-title{
+  font-size:14px;font-weight:bold;color:var(--accent);
+  letter-spacing:2px;
+}
+.loyalty-card .card-id{
+  font-size:11px;color:var(--text-muted);letter-spacing:1px;
+}
+.loyalty-card .card-tier{
+  font-size:10px;font-weight:bold;letter-spacing:2px;
+  text-transform:uppercase;margin-top:4px;
+}
+.loyalty-card .card-stripe{
+  position:absolute;top:28px;left:0;right:0;height:16px;
+  background:linear-gradient(90deg,#2a2a3a,#3a3a5a,#2a2a3a);
+}
+.card-prompt{
+  font-size:14px;color:var(--text-muted);margin-bottom:24px;
+  animation:cardPromptPulse 1.5s ease infinite alternate;
+}
+@keyframes cardPromptPulse{
+  from{opacity:.5}to{opacity:1}
+}
+
+/* === DEBUG PANEL === */
+.debug-panel{
+  width:100%;margin-top:8px;padding:8px;
+  background:rgba(255,0,0,.05);border:1px dashed rgba(255,0,0,.2);
+  border-radius:var(--radius);
+}
+.debug-title{
+  font-size:10px;color:var(--red);text-transform:uppercase;
+  letter-spacing:2px;margin-bottom:6px;opacity:.6;
+}
+.debug-buttons{
+  display:flex;flex-wrap:wrap;gap:4px;
+}
+.debug-btn{
+  padding:4px 8px;font-size:10px;font-family:inherit;
+  background:var(--bg-card);border:1px solid rgba(255,0,0,.2);
+  color:var(--text-muted);border-radius:4px;cursor:pointer;
+}
+.debug-btn:hover{background:var(--bg-hover);color:var(--text)}
+
 /* Responsive */
 @media(max-width:420px){
   .header h1{font-size:14px}
@@ -408,7 +749,11 @@ body{
 
 <div class="header">
   <h1>TINKER TIDES</h1>
-  <span class="coins" id="coinDisplay">1,000</span>
+  <div class="loyalty-badge" id="loyaltyBadge">
+    <span class="tier-dot" id="tierDot"></span>
+    <span class="tier-label" id="tierLabel">Bronze</span>
+    <span class="player-id" id="playerId">PIRATE #0000</span>
+  </div>
 </div>
 
 <div class="game-wrap">
@@ -428,6 +773,18 @@ body{
     </div>
   </div>
 
+  <!-- LED Credit & Win display -->
+  <div class="credit-panel">
+    <div class="credit-box">
+      <span class="credit-label">Credits</span>
+      <span class="credit-value" id="creditDisplay">0</span>
+    </div>
+    <div class="credit-box win-box">
+      <span class="credit-label">Won</span>
+      <span class="credit-value" id="winLedDisplay">0</span>
+    </div>
+  </div>
+
   <!-- Free spins counter -->
   <div class="free-spins-bar" id="freeSpinsBar">
     FREE SPINS: <span id="freeSpinsCount">0</span> remaining (×<span id="freeSpinsMult">2</span>)
@@ -439,9 +796,6 @@ body{
     <div class="payline-overlay" id="paylineOverlay"></div>
     <div class="cascade-display" id="cascadeDisplay">×1</div>
   </div>
-
-  <!-- Win display -->
-  <div class="win-display" id="winDisplay"></div>
 
   <!-- Controls -->
   <div class="controls">
@@ -457,11 +811,49 @@ body{
     </div>
   </div>
 
+  <!-- Bill inserter -->
+  <div class="bill-inserter" id="billInserter">
+    <div class="bill-slot" id="billSlot">
+      <div class="bill-slot-slit"></div>
+      <span class="bill-slot-icon">💵</span>
+      <span class="bill-slot-label">INSERT $100</span>
+    </div>
+    <div class="bill-anim" id="billAnim">$100</div>
+  </div>
+
   <!-- Footer tabs -->
   <div class="footer-tabs">
     <button class="footer-tab" data-tab="paytable">Paytable</button>
     <button class="footer-tab" data-tab="stats">Stats</button>
     <button class="footer-tab" data-tab="settings">Settings</button>
+  </div>
+
+  <!-- Debug panel -->
+  <div class="debug-panel" id="debugPanel">
+    <div class="debug-title">DEBUG</div>
+    <div class="debug-buttons">
+      <button class="debug-btn" id="dbgFreeSpins">Free Spins</button>
+      <button class="debug-btn" id="dbgTreasure">Treasure Hunt</button>
+      <button class="debug-btn" id="dbgWheel">Wheel</button>
+      <button class="debug-btn" id="dbgJackpotMini">JP Mini</button>
+      <button class="debug-btn" id="dbgJackpotMajor">JP Major</button>
+      <button class="debug-btn" id="dbgJackpotGrand">JP Grand</button>
+      <button class="debug-btn" id="dbgCascade">Force 3-match</button>
+      <button class="debug-btn" id="dbgBigWin">Big Win (5×Captain)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Loyalty card insert overlay -->
+<div class="card-overlay" id="cardOverlay">
+  <div class="card-prompt">Insert Loyalty Card</div>
+  <div class="card-reader-slot"></div>
+  <div class="loyalty-card" id="loyaltyCard">
+    <div class="card-stripe"></div>
+    <div class="card-logo">🏴‍☠️</div>
+    <div class="card-title">TINKER TIDES</div>
+    <div class="card-id" id="cardIdText">PIRATE #0000</div>
+    <div class="card-tier" id="cardTierText" style="color:#cd7f32">BRONZE</div>
   </div>
 </div>
 

@@ -1,0 +1,53 @@
+# Tinker Tides — Baseline RTP simulation
+# Generated: 2026-05-05 (UTC)
+# Commit:    e49c1dd
+# Command:   node simulate.js 10000000 --quiet
+#
+# This is the FROZEN baseline. After tweaking the math (paytable,
+# reel strips, multipliers, bonus configs), run:
+#   node simulate.js 10000000 --quiet > sim/<descriptive-name>.txt
+# and compare to this file.
+
+═══ Tinker Tides RTP simulation ════════════════════════════
+Spins:                            10,000,000   (23.2s, 430,145 spins/s)
+Total wagered (credits):         200,000,000
+Total returned:                  118,895,986
+────────────────────────────────────────────────────────────
+RTP:                                 59.448%
+Hit frequency:                        23.78%
+Biggest win:                         336,960 credits  (16848× bet)
+
+── Win-size distribution (% of paying spins) ───────────────
+Tiny    (< 1× bet):                79.817%
+Small   (1–5× bet):                17.291%
+Mid     (5–25× bet):                1.984%
+Big     (25–100× bet):              0.527%
+Huge    (100–500× bet):             0.281%
+Mega    (500×+ bet):                0.100%
+
+── Cascade chain lengths (% of all spins) ──────────────────
+0 cascades (no win):               77.421%
+1 cascade:                         19.436%
+2 cascades:                         2.744%
+3 cascades:                         0.350%
+4 cascades:                         0.043%
+5+ cascades:                        0.006%
+
+── Bonus trigger frequency ─────────────────────────────────
+Free spins (3+ scatter):            1.064%   1 in 94
+Wheel of Fortune:                   0.073%   1 in 1,368
+Treasure Hunt:                      0.204%   1 in 490
+
+── Jackpot trigger frequency ───────────────────────────────
+Mini:                                22296   1 in 449
+Major:                                5068   1 in 1,973
+Grand:                                1080   1 in 9,259
+
+── RTP contribution by source ──────────────────────────────
+Paylines + cascades:               13.172%
+Free spins:                         2.490%
+Wheel of Fortune:                   4.085%
+Treasure Hunt:                     30.800%
+Random progressives:                8.901%
+TOTAL:                             59.448%
+

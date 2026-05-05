@@ -168,9 +168,6 @@ const REEL_STRIPS = [
    'bonus','bonus'],
 ];
 
-// Cascade multipliers: index = cascade count (0-based)
-const CASCADE_MULTIPLIERS = [1, 2, 3, 5, 8];
-
 // Free spins config
 const FREE_SPINS_CONFIG = {
   scatterCounts: { 3: 8, 4: 12, 5: 15 },
@@ -255,7 +252,7 @@ if (typeof module !== 'undefined' && module.exports) {
     REELS, ROWS, NUM_LINES,
     SYMBOL_COLORS, RARITY_TINTS, SYMBOLS,
     PAYLINES, BET_LEVELS, REEL_STRIPS,
-    CASCADE_MULTIPLIERS, FREE_SPINS_CONFIG, TREASURE_HUNT_CONFIG,
+    FREE_SPINS_CONFIG, TREASURE_HUNT_CONFIG,
     WHEEL_SEGMENTS, JACKPOT_CONFIG,
     STARTING_CREDITS, BILL_VALUE, LOYALTY_TIERS,
     PAYLINE_COLOR_GROUPS, PAYLINE_GROUP_COUNTS, PAYLINE_COLORS,

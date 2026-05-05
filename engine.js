@@ -21,7 +21,6 @@
     var SYMBOLS = data.SYMBOLS;
     var PAYLINES = data.PAYLINES;
     var REEL_STRIPS = data.REEL_STRIPS;
-    var CASCADE_MULTIPLIERS = data.CASCADE_MULTIPLIERS;
     var FREE_SPINS_CONFIG = data.FREE_SPINS_CONFIG;
     var TREASURE_HUNT_CONFIG = data.TREASURE_HUNT_CONFIG;
     var WHEEL_SEGMENTS = data.WHEEL_SEGMENTS;
@@ -131,34 +130,8 @@
       return { triggered: reel0 && reel4, positions: positions };
     }
 
-    // ─── Cascade math (pure — no animation) ─────────────────────────
-    // removedPositions: array of {reel, row} (matches game.js's API).
-    // Returns a NEW grid; does not mutate input.
-    function cascadeDrop(grid, removedPositions) {
-      var newGrid = grid.map(function(col) { return col.slice(); });
-      var removedByReel = {};
-      for (var i = 0; i < removedPositions.length; i++) {
-        var pos = removedPositions[i];
-        if (!removedByReel[pos.reel]) removedByReel[pos.reel] = {};
-        removedByReel[pos.reel][pos.row] = true;
-      }
-      for (var r = 0; r < REELS; r++) {
-        var removed = removedByReel[r];
-        if (!removed) continue;
-        var kept = [];
-        for (var row = 0; row < ROWS; row++) {
-          if (!removed[row]) kept.push(newGrid[r][row]);
-        }
-        var needed = ROWS - kept.length;
-        var newSyms = [];
-        for (var ni = 0; ni < needed; ni++) newSyms.push(randomSymbolFromReel(r));
-        newGrid[r] = newSyms.concat(kept);
-      }
-      return newGrid;
-    }
-
-    // ─── Headless spin (cascade chain) ───────────────────────────────
-    // Runs the full cascade chain on a grid, returning total payline win
+    // ─── Headless spin ───────────────────────────────────────────────
+    // Evaluates a single grid (no cascade), returning total payline win
     // in DENOM-MULTIPLIER UNITS (multiply by denom in credits to get credits).
     // opts.fixedGrid:    optional starting grid (otherwise random)
     // opts.freeSpinMult: multiplier applied to all line wins (1, or 2 in free spins)
@@ -168,40 +141,21 @@
       var grid = opts.fixedGrid
         ? opts.fixedGrid.map(function(c) { return c.slice(); })
         : generateGrid();
-      var initialGrid = grid.map(function(c) { return c.slice(); });
 
-      // First-cascade-only triggers (independent of line wins)
       var scatterResult = countSymbol(grid, 'scatter');
       var bonusResult = checkBonusTrigger(grid);
       var treasureResult = checkTreasureHunt(grid);
 
+      var wins = evaluatePaylines(grid);
       var totalUnits = 0;
-      var cascadeCount = 0;
-      while (true) {
-        var wins = evaluatePaylines(grid);
-        if (wins.length === 0) break;
-        var cascadeMult = CASCADE_MULTIPLIERS[Math.min(cascadeCount, CASCADE_MULTIPLIERS.length - 1)];
-        var winPositions = [];
-        var seen = {};
-        for (var wi = 0; wi < wins.length; wi++) {
-          var w = wins[wi];
-          totalUnits += w.payout * cascadeMult * freeSpinMult;
-          for (var pi = 0; pi < w.count; pi++) {
-            var k = w.positions[pi].reel + ',' + w.positions[pi].row;
-            if (seen[k]) continue;
-            seen[k] = true;
-            winPositions.push(w.positions[pi]);
-          }
-        }
-        grid = cascadeDrop(grid, winPositions);
-        cascadeCount++;
+      for (var wi = 0; wi < wins.length; wi++) {
+        totalUnits += wins[wi].payout * freeSpinMult;
       }
 
       return {
-        initialGrid: initialGrid,
-        finalGrid: grid,
+        grid: grid,
+        wins: wins,
         paylineWinUnits: totalUnits,
-        cascades: cascadeCount,
         scatterCount: scatterResult.count,
         bonusTriggered: bonusResult.triggered,
         treasureHuntTriggered: treasureResult.triggered,
@@ -370,8 +324,7 @@
       countSymbol: countSymbol,
       checkBonusTrigger: checkBonusTrigger,
       checkTreasureHunt: checkTreasureHunt,
-      cascadeDrop: cascadeDrop,
-      // Headless cascade orchestration (used by simulate.js)
+      // Headless spin (used by simulate.js)
       runSpin: runSpin,
       runFreeSpinsSession: runFreeSpinsSession,
       runWheelOfFortune: runWheelOfFortune,

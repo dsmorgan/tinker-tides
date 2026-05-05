@@ -1,0 +1,40 @@
+# Tinker Tides — RTP simulation (cascade feature REMOVED)
+# Generated: 2026-05-05 (UTC)
+# Diff vs baseline:  cascade win feature stripped from engine/game/UI
+# Command: node simulate.js 10000000 --quiet
+
+═══ Tinker Tides RTP simulation ════════════════════════════
+Spins:                            10,000,000   (11.0s, 908,018 spins/s)
+Total wagered (credits):         200,000,000
+Total returned:                  110,171,970
+────────────────────────────────────────────────────────────
+RTP:                                 55.086%
+Hit frequency:                        23.81%
+Biggest win:                         281,025 credits  (14051× bet)
+
+── Win-size distribution (% of paying spins) ───────────────
+Tiny    (< 1× bet):                86.270%
+Small   (1–5× bet):                11.422%
+Mid     (5–25× bet):                1.412%
+Big     (25–100× bet):              0.520%
+Huge    (100–500× bet):             0.278%
+Mega    (500×+ bet):                0.099%
+
+── Bonus trigger frequency ─────────────────────────────────
+Free spins (3+ scatter):            1.070%   1 in 93
+Wheel of Fortune:                   0.073%   1 in 1,378
+Treasure Hunt:                      0.205%   1 in 487
+
+── Jackpot trigger frequency ───────────────────────────────
+Mini:                                21873   1 in 457
+Major:                                5143   1 in 1,944
+Grand:                                1077   1 in 9,285
+
+── RTP contribution by source ──────────────────────────────
+Paylines:                          10.045%
+Free spins:                         1.900%
+Wheel of Fortune:                   4.009%
+Treasure Hunt:                     30.161%
+Random progressives:                8.970%
+TOTAL:                             55.086%
+

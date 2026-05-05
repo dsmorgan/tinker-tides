@@ -38,7 +38,6 @@ function newStats() {
     totalBet: 0,
     totalWon: 0,
     payingSpins: 0,
-    cascadeChainLengths: [0, 0, 0, 0, 0, 0],   // index = cascade count
     biggestWin: 0,
     winsBySize: {                                // bucketed by multiple of bet
       tiny:   0,   // 0 < win < bet
@@ -63,7 +62,6 @@ function newStats() {
     },
     bonusContribution: {
       paylines:     0,
-      cascadeBeyond1: 0, // wins from cascade index 2+
       freeSpins:    0,
       wheel:        0,
       treasureHunt: 0,
@@ -116,11 +114,11 @@ for (var i = 0; i < spins; i++) {
     stats.jackpotPools[jt] += betPerSpin * JACKPOT_CONFIG[jt].contribution;
   }
 
-  // Spin: cascade chain returns total payline win in denom units (= credits at denom=1)
+  // Spin: single payline evaluation (no cascade) returns total payline win
+  // in denom units (= credits at denom=1).
   var spin = Engine.runSpin();
   var paylineWin = spin.paylineWinUnits;
   stats.bonusContribution.paylines += paylineWin;
-  stats.cascadeChainLengths[Math.min(spin.cascades, stats.cascadeChainLengths.length - 1)]++;
 
   var spinWin = paylineWin;
 
@@ -209,15 +207,6 @@ console.log(bar('Huge    (100–500× bet):', pct(stats.winsBySize.huge,  paying
 console.log(bar('Mega    (500×+ bet):',    pct(stats.winsBySize.mega,  paying)));
 console.log();
 
-console.log('── Cascade chain lengths (% of all spins) ──────────────────');
-for (var c = 0; c < stats.cascadeChainLengths.length; c++) {
-  var label = (c === 0) ? '0 cascades (no win):' :
-              (c === stats.cascadeChainLengths.length - 1) ? (c + '+ cascades:') :
-              (c + ' cascade' + (c > 1 ? 's' : '') + ':');
-  console.log(bar(label, pct(stats.cascadeChainLengths[c], stats.spins)));
-}
-console.log();
-
 console.log('── Bonus trigger frequency ─────────────────────────────────');
 console.log(bar('Free spins (3+ scatter):',  pct(stats.triggers.scatter,      stats.spins)) +
             '   1 in ' + (stats.triggers.scatter ? Math.round(stats.spins / stats.triggers.scatter).toLocaleString() : '∞'));
@@ -242,7 +231,7 @@ var fs = stats.bonusContribution.freeSpins / stats.totalBet * 100;
 var wh = stats.bonusContribution.wheel / stats.totalBet * 100;
 var th = stats.bonusContribution.treasureHunt / stats.totalBet * 100;
 var jp = stats.bonusContribution.jackpots / stats.totalBet * 100;
-console.log(bar('Paylines + cascades:', pl.toFixed(3) + '%'));
+console.log(bar('Paylines:',            pl.toFixed(3) + '%'));
 console.log(bar('Free spins:',          fs.toFixed(3) + '%'));
 console.log(bar('Wheel of Fortune:',    wh.toFixed(3) + '%'));
 console.log(bar('Treasure Hunt:',       th.toFixed(3) + '%'));

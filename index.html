@@ -598,24 +598,6 @@ body::after{
   from{box-shadow:inset 0 0 8px rgba(255,215,0,.5),0 0 12px rgba(255,215,0,.3)}
   to{box-shadow:inset 0 0 16px rgba(255,215,0,.8),0 0 24px rgba(255,215,0,.6)}
 }
-/* Cascade shatter */
-.symbol-cell.shattering{
-  animation:shatter 0.4s ease-out forwards;
-}
-@keyframes shatter{
-  0%{transform:scale(1);opacity:1}
-  50%{transform:scale(1.2) rotate(10deg);opacity:.5}
-  100%{transform:scale(0) rotate(45deg);opacity:0}
-}
-/* Cascade drop */
-.symbol-cell.dropping{
-  animation:dropIn 0.3s ease-out;
-}
-@keyframes dropIn{
-  from{transform:translateY(-100%);opacity:0}
-  to{transform:translateY(0);opacity:1}
-}
-
 /* Payline overlay */
 .payline-overlay{
   position:absolute;top:0;left:0;right:0;bottom:0;
@@ -668,15 +650,6 @@ body::after{
   font-size:13px;color:#c084fc;display:none;
 }
 .free-spins-bar.active{display:block}
-
-/* Cascade multiplier display */
-.cascade-display{
-  position:absolute;top:4px;right:4px;z-index:20;
-  padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;
-  background:rgba(255,211,92,.15);color:var(--gold);
-  border:1px solid rgba(255,211,92,.3);display:none;
-}
-.cascade-display.active{display:block}
 
 /* Footer tabs */
 .footer-tabs{
@@ -852,10 +825,6 @@ body::after{
 .notification.free-spins-notify{
   background:linear-gradient(135deg,rgba(168,85,247,.9),rgba(124,58,237,.9));
   color:#fff;border:2px solid #c084fc;
-}
-.notification.cascade-notify{
-  background:linear-gradient(135deg,rgba(255,211,92,.9),rgba(184,134,11,.9));
-  color:#000;border:2px solid var(--gold);
 }
 .notification.bonus-notify{
   background:linear-gradient(135deg,rgba(220,38,38,.9),rgba(139,32,32,.9));
@@ -1103,7 +1072,6 @@ body::after{
     <div class="reel-frame" id="reelFrame">
       <div class="reel-grid" id="reelGrid"></div>
       <div class="payline-overlay" id="paylineOverlay"></div>
-      <div class="cascade-display" id="cascadeDisplay">×1</div>
     </div>
   </div>
   <div class="below-reels-row">

@@ -30,7 +30,6 @@ function defaultState() {
     },
     stats: {
       biggestWin: 0,
-      cascadeRecord: 0,
       bonusesTriggered: 0,
       jackpotsWon: { mini: 0, major: 0, grand: 0 },
     },
@@ -391,7 +390,6 @@ async function doSpin() {
   state.totalSpins++;
   clearWinAmount();
   clearPaylineOverlay();
-  hideCascadeDisplay();
   updateUI();
   saveState();
 
@@ -588,74 +586,45 @@ function makeSpinCell(symId, cellH) {
 }
 
 async function processSpinResult(grid, isFree) {
+  var freeSpinMult = isFree || state.freeSpins.active ? FREE_SPINS_CONFIG.baseMultiplier : 1;
+
+  // Trigger checks (scatter / bonus / treasure)
+  var scatterResult = countSymbol(grid, 'scatter');
+  if (scatterResult.count >= 3) {
+    await triggerFreeSpins(scatterResult, isFree);
+  }
+  var bonusResult = checkBonusTrigger(grid);
+  if (bonusResult.triggered) {
+    state.stats.bonusesTriggered++;
+    await triggerWheelOfFortune();
+  }
+  var treasureResult = checkTreasureHunt(grid);
+  if (treasureResult.triggered) {
+    state.stats.bonusesTriggered++;
+    await triggerTreasureHunt();
+  }
+
+  // Single payline evaluation (no cascade)
+  var wins = evaluatePaylines(grid);
   var totalWin = 0;
-  var cascadeCount = 0;
-  var workingGrid = grid.map(function(col) { return col.slice(); });
-
-  // Cascade loop
-  while (true) {
-    var wins = evaluatePaylines(workingGrid);
-
-    // Check scatters (only on first cascade)
-    if (cascadeCount === 0) {
-      var scatterResult = countSymbol(workingGrid, 'scatter');
-      if (scatterResult.count >= 3) {
-        await triggerFreeSpins(scatterResult, isFree);
-      }
-
-      var bonusResult = checkBonusTrigger(workingGrid);
-      if (bonusResult.triggered) {
-        state.stats.bonusesTriggered++;
-        await triggerWheelOfFortune();
-      }
-
-      var treasureResult = checkTreasureHunt(workingGrid);
-      if (treasureResult.triggered) {
-        state.stats.bonusesTriggered++;
-        await triggerTreasureHunt();
-      }
-    }
-
-    if (wins.length === 0) break;
-
-    var cascadeMult = CASCADE_MULTIPLIERS[Math.min(cascadeCount, CASCADE_MULTIPLIERS.length - 1)];
-    var freeSpinMult = isFree || state.freeSpins.active ? FREE_SPINS_CONFIG.baseMultiplier : 1;
-
-    if (cascadeCount > 0) {
-      showCascadeDisplay(cascadeMult);
-      showNotification('CASCADE \u00d7' + cascadeMult, 'cascade-notify');
-      await sleep(600);
-    }
-
-    // Collect all winning positions
+  var hlPositions = [];
+  if (wins.length > 0) {
     var winPosSet = {};
-    var cascadeWin = 0;
     for (var wi = 0; wi < wins.length; wi++) {
       var win = wins[wi];
-      cascadeWin += win.payout * state.betPerLine * cascadeMult * freeSpinMult;
+      totalWin += win.payout * state.betPerLine * freeSpinMult;
       for (var pi = 0; pi < win.count; pi++) {
         var pos = win.positions[pi];
         winPosSet[pos.reel + ',' + pos.row] = true;
       }
     }
-    totalWin += cascadeWin;
-
-    var hlPositions = [];
     for (var key in winPosSet) {
       var parts = key.split(',');
       hlPositions.push({ reel: parseInt(parts[0]), row: parseInt(parts[1]) });
     }
-    renderGrid(workingGrid, hlPositions);
+    renderGrid(grid, hlPositions);
     drawPaylines(wins);
     await sleep(800);
-
-    await shatterSymbols(hlPositions);
-    workingGrid = await cascadeDrop(workingGrid, hlPositions);
-    cascadeCount++;
-  }
-
-  if (cascadeCount > state.stats.cascadeRecord) {
-    state.stats.cascadeRecord = cascadeCount;
   }
 
   if (totalWin > 0) {
@@ -669,55 +638,7 @@ async function processSpinResult(grid, isFree) {
     await checkRandomJackpot();
   }
 
-  currentGrid = workingGrid;
-  hideCascadeDisplay();
-}
-
-// ─── Cascade animations ─────────────────────────────────────────────
-async function shatterSymbols(positions) {
-  for (var i = 0; i < positions.length; i++) {
-    var pos = positions[i];
-    var cell = document.querySelector('.symbol-cell[data-reel="' + pos.reel + '"][data-row="' + pos.row + '"]');
-    if (cell) cell.classList.add('shattering');
-  }
-  await sleep(400);
-}
-
-async function cascadeDrop(grid, removedPositions) {
-  // Math: build the new grid (delegated to engine.js so simulate.js matches)
-  var newGrid = Engine.cascadeDrop(grid, removedPositions);
-
-  // For animation we still need a per-reel removed-row count
-  var removedByReel = {};
-  for (var i = 0; i < removedPositions.length; i++) {
-    var pos = removedPositions[i];
-    if (!removedByReel[pos.reel]) removedByReel[pos.reel] = {};
-    removedByReel[pos.reel][pos.row] = true;
-  }
-
-  renderGrid(newGrid);
-  for (var r2 = 0; r2 < REELS; r2++) {
-    var removed2 = removedByReel[r2];
-    if (!removed2) continue;
-    var neededCount = Object.keys(removed2).length;
-    for (var row2 = 0; row2 < neededCount; row2++) {
-      var cell = document.querySelector('.symbol-cell[data-reel="' + r2 + '"][data-row="' + row2 + '"]');
-      if (cell) cell.classList.add('dropping');
-    }
-  }
-  await sleep(350);
-
-  return newGrid;
-}
-
-function showCascadeDisplay(mult) {
-  var el = $id('cascadeDisplay');
-  el.textContent = '\u00d7' + mult;
-  el.classList.add('active');
-}
-
-function hideCascadeDisplay() {
-  $id('cascadeDisplay').classList.remove('active');
+  currentGrid = grid;
 }
 
 // ─── Payline overlay ─────────────────────────────────────────────────
@@ -1466,7 +1387,6 @@ function openStats() {
     ['Total Won', formatNum(Math.floor(state.totalWon)) + ' cr'],
     ['Net', formatNum(Math.floor(state.totalWon - state.totalBet)) + ' cr'],
     ['Biggest Win', formatNum(Math.floor(state.stats.biggestWin)) + ' cr'],
-    ['Longest Cascade', state.stats.cascadeRecord + ' chains'],
     ['Bonuses Triggered', formatNum(state.stats.bonusesTriggered)],
     ['Mini Jackpots Won', formatNum(state.stats.jackpotsWon.mini)],
     ['Major Jackpots Won', formatNum(state.stats.jackpotsWon.major)],

@@ -337,17 +337,26 @@ body::after{
 }
 .line-stripe-list{
   flex:1;
-  display:flex;flex-direction:column;gap:1px;
+  display:flex;flex-direction:column;
   border:2px solid var(--gold-dim);
   border-radius:4px;
   overflow:hidden;
   padding:2px;
   background:#0a0a12;
 }
+/* Each section = 1/3 of the bar, aligning with one row of the leftmost reel */
+.line-section{
+  flex:1;
+  display:flex;flex-direction:column;gap:1px;
+  padding:1px 0;
+}
+.line-section + .line-section{
+  border-top:1px solid rgba(255,215,0,.18);
+}
 .line-stripe{
   flex:1;
   border-radius:1px;
-  min-height:3px;
+  min-height:2px;
   transition:filter .25s,box-shadow .25s,transform .25s;
   opacity:.55;
 }
@@ -361,7 +370,15 @@ body::after{
   from{opacity:.85;transform:scaleX(1)}
   to{opacity:1;transform:scaleX(1.15)}
 }
+
+/* Row beneath the reels: "20 LINES" label sits under the line-indicator,
+   SPIN button stretches across to match the reel-frame's width. */
+.below-reels-row{
+  width:100%;
+  display:flex;align-items:stretch;gap:6px;
+}
 .line-indicator-label{
+  flex:0 0 28px;
   text-align:center;
   font-family:'Impact','Arial Black',sans-serif;
   font-size:10px;line-height:1.05;
@@ -372,8 +389,9 @@ body::after{
 .line-indicator-label span{
   display:block;font-size:14px;color:var(--gold-bright);
 }
+.below-reels-row .controls{flex:1;width:auto}
 @media(max-width:380px){
-  .line-indicator{flex:0 0 20px}
+  .line-indicator,.line-indicator-label{flex:0 0 20px}
   .line-indicator-label{font-size:8px}
   .line-indicator-label span{font-size:11px}
 }
@@ -1075,11 +1093,12 @@ body::after{
     FREE SPINS: <span id="freeSpinsCount">0</span> remaining (×<span id="freeSpinsMult">2</span>)
   </div>
 
-  <!-- Reel area: line indicator (left) + reel frame -->
+  <!-- Reel area: line indicator (left) + reel frame.
+       Below it: the line count label sits under the indicator, and the SPIN
+       button stretches to match the reel-frame width. -->
   <div class="reel-area">
     <div class="line-indicator" id="lineIndicator">
       <div class="line-stripe-list" id="lineStripeList"></div>
-      <div class="line-indicator-label"><span id="lineCount">20</span>LINES</div>
     </div>
     <div class="reel-frame" id="reelFrame">
       <div class="reel-grid" id="reelGrid"></div>
@@ -1087,10 +1106,11 @@ body::after{
       <div class="cascade-display" id="cascadeDisplay">×1</div>
     </div>
   </div>
-
-  <!-- Controls — just SPIN; bet is set via DENOM toggle in win-panel -->
-  <div class="controls">
-    <button class="btn-spin" id="spinBtn">SPIN</button>
+  <div class="below-reels-row">
+    <div class="line-indicator-label"><span id="lineCount">20</span>LINES</div>
+    <div class="controls">
+      <button class="btn-spin" id="spinBtn">SPIN</button>
+    </div>
   </div>
 
   <!-- Bill inserter -->
@@ -1122,6 +1142,7 @@ body::after{
       <button class="debug-btn" id="dbgJackpotGrand">JP Grand</button>
       <button class="debug-btn" id="dbgCascade">Force 3-match</button>
       <button class="debug-btn" id="dbgBigWin">Big Win (5×Captain)</button>
+      <button class="debug-btn" id="dbgRollLines">Roll Lines</button>
     </div>
   </div>
 </div>
@@ -1151,6 +1172,7 @@ body::after{
 </div>
 
 <script src="data.js"></script>
+<script src="engine.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

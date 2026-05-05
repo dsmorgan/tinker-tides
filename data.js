@@ -1,5 +1,9 @@
 /* Tinker Tides — Static Game Data */
 
+// Grid dimensions
+const REELS = 5;
+const ROWS = 3;
+
 // Per-symbol cell background colors (Style 7)
 const SYMBOL_COLORS = {
   compass:  '#00897b', // teal
@@ -51,28 +55,34 @@ const SYMBOLS = {
 // Pay values are multiplied by betPerLine
 // pay[i] = payout for (i+1) matching symbols; index 0=1-of-kind (no pay), index 4=5-of-kind
 
-// 20 fixed paylines — each is array of row indices [reel0, reel1, reel2, reel3, reel4]
+// 20 fixed paylines — each is array of row indices [reel0, reel1, reel2, reel3, reel4].
+// Ordered top-anchored → middle-anchored → bottom-anchored so the indicator stripe
+// position matches the row the line starts on (reel 1's top/middle/bottom cell).
+// Distribution: 7 top-starters, 6 middle-starters, 7 bottom-starters.
 const PAYLINES = [
-  [1,1,1,1,1], // 1: middle
-  [0,0,0,0,0], // 2: top
-  [2,2,2,2,2], // 3: bottom
-  [0,1,2,1,0], // 4: V
-  [2,1,0,1,2], // 5: inverted V
-  [0,0,1,0,0], // 6: slight dip
-  [2,2,1,2,2], // 7: slight rise
-  [1,0,0,0,1], // 8: U
-  [1,2,2,2,1], // 9: inverted U
-  [0,1,1,1,0], // 10: shallow V
-  [2,1,1,1,2], // 11: shallow inv V
-  [1,0,1,0,1], // 12: zigzag up
-  [1,2,1,2,1], // 13: zigzag down
-  [0,1,0,1,0], // 14: small zigzag top
-  [2,1,2,1,2], // 15: small zigzag bottom
-  [0,0,1,2,2], // 16: descending slope
-  [2,2,1,0,0], // 17: ascending slope
-  [1,0,0,1,2], // 18: hook left
-  [1,2,2,1,0], // 19: hook right
-  [0,1,2,2,1], // 20: wave
+  // Top-anchored (7) — line 1..7
+  [0,0,0,0,0], // 1: top straight
+  [0,1,2,1,0], // 2: V
+  [0,0,1,0,0], // 3: slight dip
+  [0,1,1,1,0], // 4: shallow V
+  [0,1,0,1,0], // 5: small zigzag top
+  [0,0,1,2,2], // 6: descending slope
+  [0,1,2,2,1], // 7: top wave
+  // Middle-anchored (6) — line 8..13
+  [1,1,1,1,1], // 8: middle straight
+  [1,0,0,0,1], // 9: U
+  [1,2,2,2,1], // 10: inverted U
+  [1,0,1,0,1], // 11: zigzag up
+  [1,2,1,2,1], // 12: zigzag down
+  [1,0,0,1,2], // 13: hook
+  // Bottom-anchored (7) — line 14..20
+  [2,2,2,2,2], // 14: bottom straight
+  [2,1,0,1,2], // 15: inverted V
+  [2,2,1,2,2], // 16: slight rise
+  [2,1,1,1,2], // 17: shallow inv V
+  [2,1,2,1,2], // 18: small zigzag bottom
+  [2,2,1,0,0], // 19: ascending slope
+  [2,1,0,0,1], // 20: bottom wave (mirror of line 7)
 ];
 
 // Bet levels (credits per line, 1 credit = $0.01)
@@ -220,10 +230,34 @@ const LOYALTY_TIERS = [
   { id: 'platinum', label: 'Platinum', color: '#e5e4e2', minWagered: 500000 },  // $5,000
 ];
 
-// Payline colors for highlighting
-const PAYLINE_COLORS = [
-  '#ff4444','#44ff44','#4444ff','#ffff44','#ff44ff',
-  '#44ffff','#ff8844','#88ff44','#4488ff','#ff4488',
-  '#44ff88','#8844ff','#ffaa44','#44ffaa','#aa44ff',
-  '#ff6644','#66ff44','#4466ff','#ff4466','#66ff66',
-];
+// 6-color rainbow grouping (red, orange, yellow, green, blue, purple).
+// Custom counts 3/4/3/3/4/3 = 20 align with the reel-row split (7/6/7):
+//   Top section    (7 lines): 3 red + 4 orange
+//   Middle section (6 lines): 3 yellow + 3 green
+//   Bottom section (7 lines): 4 blue + 3 purple
+const PAYLINE_COLOR_GROUPS = ['#ff4444','#ff8844','#ffcc44','#44dd44','#4488ff','#cc44ff'];
+const PAYLINE_GROUP_COUNTS = [3, 4, 3, 3, 4, 3];
+const PAYLINE_COLORS = (function() {
+  var arr = [];
+  for (var g = 0; g < PAYLINE_COLOR_GROUPS.length; g++) {
+    for (var n = 0; n < PAYLINE_GROUP_COUNTS[g]; n++) {
+      arr.push(PAYLINE_COLOR_GROUPS[g]);
+    }
+  }
+  return arr;
+})();
+
+// UMD export: this file is loaded as a classic <script> in browser (consts go
+// into the script-level lexical scope, shared with engine.js / game.js).
+// In Node it's required by engine.js and simulate.js.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    REELS, ROWS, NUM_LINES,
+    SYMBOL_COLORS, RARITY_TINTS, SYMBOLS,
+    PAYLINES, BET_LEVELS, REEL_STRIPS,
+    CASCADE_MULTIPLIERS, FREE_SPINS_CONFIG, TREASURE_HUNT_CONFIG,
+    WHEEL_SEGMENTS, JACKPOT_CONFIG,
+    STARTING_CREDITS, BILL_VALUE, LOYALTY_TIERS,
+    PAYLINE_COLOR_GROUPS, PAYLINE_GROUP_COUNTS, PAYLINE_COLORS,
+  };
+}

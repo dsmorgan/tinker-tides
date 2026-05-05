@@ -1,8 +1,8 @@
-/* Tinker Tides — Game Engine */
+/* Tinker Tides — Game Engine (UI / state / animations).
+ * Pure math lives in engine.js (window.Engine). REELS / ROWS / NUM_LINES
+ * etc. come from data.js and are shared globals. */
 
 const STORAGE_KEY = 'tnkr_tinker_tides';
-const REELS = 5;
-const ROWS = 3;
 
 // ─── State ───────────────────────────────────────────────────────────
 function generatePlayerId() {
@@ -92,120 +92,16 @@ function iconHTML(slug, tier, size) {
   return '<div class="sym-icon tier-' + tier + '" style="width:' + size + 'px;height:' + size + 'px;-webkit-mask-image:url(\'data:image/svg+xml,' + data + '\');mask-image:url(\'data:image/svg+xml,' + data + '\')"></div>';
 }
 
-// ─── Reel logic ──────────────────────────────────────────────────────
-function randomSymbolFromReel(reelIdx) {
-  const strip = REEL_STRIPS[reelIdx];
-  return strip[Math.floor(Math.random() * strip.length)];
-}
-
-function generateGrid() {
-  const grid = [];
-  for (let r = 0; r < REELS; r++) {
-    const col = [];
-    for (let row = 0; row < ROWS; row++) {
-      col.push(randomSymbolFromReel(r));
-    }
-    grid.push(col);
-  }
-  return grid;
-}
-
-// ─── Win evaluation ──────────────────────────────────────────────────
-function evaluatePaylines(grid) {
-  const wins = [];
-  for (let i = 0; i < PAYLINES.length; i++) {
-    const line = PAYLINES[i];
-    const symbols = line.map(function(row, reel) { return grid[reel][row]; });
-    const result = evaluateLine(symbols);
-    if (result) {
-      result.lineIndex = i;
-      result.positions = line.map(function(row, reel) { return { reel: reel, row: row }; });
-      wins.push(result);
-    }
-  }
-  return wins;
-}
-
-function evaluateLine(symbols) {
-  // Find the first non-wild symbol
-  var baseSymbol = null;
-  for (var idx = 0; idx < symbols.length; idx++) {
-    var s = symbols[idx];
-    if (s !== 'wild' && s !== 'scatter' && s !== 'bonus') {
-      baseSymbol = s;
-      break;
-    }
-  }
-  // All wilds
-  if (!baseSymbol) {
-    if (symbols[0] === 'wild') baseSymbol = 'wild';
-    else return null;
-  }
-
-  // Count consecutive matches from left (wilds substitute)
-  var count = 0;
-  for (var i = 0; i < symbols.length; i++) {
-    var sym = symbols[i];
-    if (sym === baseSymbol || (SYMBOLS[sym] && SYMBOLS[sym].isWild)) {
-      count++;
-    } else {
-      break;
-    }
-  }
-
-  if (count < 3) return null;
-
-  var symDef = SYMBOLS[baseSymbol];
-  if (!symDef) return null;
-  var payout = symDef.pay[count - 1] || 0;
-  if (payout === 0) return null;
-
-  return { symbol: baseSymbol, count: count, payout: payout };
-}
-
-// Count scatters/bonus anywhere on grid
-function countSymbol(grid, symId) {
-  var count = 0;
-  var positions = [];
-  for (var r = 0; r < REELS; r++) {
-    for (var row = 0; row < ROWS; row++) {
-      if (grid[r][row] === symId) {
-        count++;
-        positions.push({ reel: r, row: row });
-      }
-    }
-  }
-  return { count: count, positions: positions };
-}
-
-// Check bonus trigger: bonus on reels 0, 2, 4
-function checkBonusTrigger(grid) {
-  var count = 0;
-  var positions = [];
-  var targetReels = [0, 2, 4];
-  for (var ri = 0; ri < targetReels.length; ri++) {
-    var r = targetReels[ri];
-    for (var row = 0; row < ROWS; row++) {
-      if (grid[r][row] === 'bonus') {
-        count++;
-        positions.push({ reel: r, row: row });
-        break;
-      }
-    }
-  }
-  return { triggered: count >= 3, count: count, positions: positions };
-}
-
-// Check treasure hunt: captain on reels 0 AND 4
-function checkTreasureHunt(grid) {
-  var reel0 = false, reel4 = false;
-  var positions = [];
-  for (var row = 0; row < ROWS; row++) {
-    if (grid[0][row] === 'captain') { reel0 = true; positions.push({ reel: 0, row: row }); }
-    if (grid[4][row] === 'captain') { reel4 = true; positions.push({ reel: 4, row: row }); }
-  }
-  return { triggered: reel0 && reel4, positions: positions };
-}
+// ─── Pure math (delegated to engine.js so simulate.js shares the impl) ──
+// engine.js exposes window.Engine; we alias the functions locally so the
+// rest of game.js can keep calling them by their bare names.
+var randomSymbolFromReel = Engine.randomSymbolFromReel;
+var generateGrid         = Engine.generateGrid;
+var evaluateLine         = Engine.evaluateLine;
+var evaluatePaylines     = Engine.evaluatePaylines;
+var countSymbol          = Engine.countSymbol;
+var checkBonusTrigger    = Engine.checkBonusTrigger;
+var checkTreasureHunt    = Engine.checkTreasureHunt;
 
 // ─── Rendering ───────────────────────────────────────────────────────
 var $id = function(id) { return document.getElementById(id); };
@@ -788,28 +684,15 @@ async function shatterSymbols(positions) {
 }
 
 async function cascadeDrop(grid, removedPositions) {
-  var newGrid = grid.map(function(col) { return col.slice(); });
+  // Math: build the new grid (delegated to engine.js so simulate.js matches)
+  var newGrid = Engine.cascadeDrop(grid, removedPositions);
+
+  // For animation we still need a per-reel removed-row count
   var removedByReel = {};
   for (var i = 0; i < removedPositions.length; i++) {
     var pos = removedPositions[i];
     if (!removedByReel[pos.reel]) removedByReel[pos.reel] = {};
     removedByReel[pos.reel][pos.row] = true;
-  }
-
-  for (var r = 0; r < REELS; r++) {
-    var removed = removedByReel[r];
-    if (!removed) continue;
-
-    var kept = [];
-    for (var row = 0; row < ROWS; row++) {
-      if (!removed[row]) kept.push(newGrid[r][row]);
-    }
-    var needed = ROWS - kept.length;
-    var newSyms = [];
-    for (var ni = 0; ni < needed; ni++) {
-      newSyms.push(randomSymbolFromReel(r));
-    }
-    newGrid[r] = newSyms.concat(kept);
   }
 
   renderGrid(newGrid);
@@ -1700,18 +1583,30 @@ function wireDebug(id, fn) {
 }
 
 // ─── Line indicator (vertical bar beside reels) ──────────────────────
+// Stripes are grouped into 3 sections (top/middle/bottom) — each section
+// occupies 1/3 of the indicator height, matching one row of the leftmost
+// reel. A payline lands in the section corresponding to its starting row
+// (PAYLINES[i][0] ∈ {0,1,2}).
 function initLineIndicator() {
   var list = $id('lineStripeList');
   if (!list) return;
   list.textContent = '';
+  var sections = [];
+  for (var s = 0; s < ROWS; s++) {
+    var section = document.createElement('div');
+    section.className = 'line-section';
+    list.appendChild(section);
+    sections.push(section);
+  }
   for (var i = 0; i < NUM_LINES; i++) {
+    var rowIdx = PAYLINES[i][0];
     var stripe = document.createElement('div');
     stripe.className = 'line-stripe';
     stripe.dataset.lineIdx = i;
     var color = PAYLINE_COLORS[i % PAYLINE_COLORS.length];
     stripe.style.backgroundColor = color;
-    stripe.style.color = color; // for currentColor in glow box-shadow
-    list.appendChild(stripe);
+    stripe.style.color = color; // currentColor for glow box-shadow
+    sections[rowIdx].appendChild(stripe);
   }
   var lc = $id('lineCount');
   if (lc) lc.textContent = NUM_LINES;
@@ -1852,6 +1747,14 @@ function init() {
     currentGrid = forced;
     renderGrid(currentGrid);
     processSpinResult(currentGrid, false);
+  });
+  wireDebug('dbgRollLines', async function() {
+    if (spinning) return;
+    for (var i = 0; i < NUM_LINES; i++) {
+      drawPaylines([{ lineIndex: i, payout: 0, count: 5, positions: [] }]);
+      await sleep(550);
+    }
+    clearPaylineOverlay();
   });
 }
 

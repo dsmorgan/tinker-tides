@@ -5,6 +5,53 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Tinker Tides</title>
 <link rel="icon" type="image/x-icon" href="../favicon.ico">
+<script src="icon-data.js"></script>
+<script>
+  // Inject mask-image rules for cabinet-side gold piles and the mural backdrop.
+  // Inline-injected stylesheet (instead of CSS vars) avoids quirks with var()
+  // resolution inside mask-image and runs as soon as icon-data.js parses.
+  (function injectDecorativeMasks(){
+    const coin  = `url("data:image/svg+xml,${ICON_DATA['coins']}")`;
+    const mural = `url("data:image/svg+xml,${ICON_DATA['crossed-swords']}")`;
+    const css = `
+      .cabinet-pile::after{
+        -webkit-mask-image:${coin};mask-image:${coin};
+      }
+      body::after{
+        -webkit-mask-image:${mural};mask-image:${mural};
+      }
+    `;
+    const s = document.createElement('style');
+    s.textContent = css;
+    document.head.appendChild(s);
+  })();
+
+  // Responsive panel relocation:
+  //   - Wide (>=900px): progressives → RIGHT cabinet TOP, win panel → LEFT cabinet BOTTOM
+  //   - Narrow (<900px): both panels return to top of .game-wrap (progressives, then win)
+  document.addEventListener('DOMContentLoaded', () => {
+    const progressives = document.getElementById('progressivesPanel');
+    const winPanel     = document.getElementById('winPanel');
+    const gameWrap     = document.querySelector('.game-wrap');
+    const leftSlot     = document.getElementById('cabinetSlotLeft');
+    const rightSlot    = document.getElementById('cabinetSlotRight');
+    if (!progressives || !winPanel || !gameWrap || !leftSlot || !rightSlot) return;
+
+    const mq = window.matchMedia('(min-width: 900px)');
+    function relocate(){
+      if (mq.matches) {
+        leftSlot.appendChild(winPanel);
+        rightSlot.appendChild(progressives);
+      } else {
+        // Restore to top of .game-wrap, in mobile DOM order: progressives first, then win
+        gameWrap.prepend(winPanel);
+        gameWrap.prepend(progressives);
+      }
+    }
+    relocate();
+    mq.addEventListener('change', relocate);
+  });
+</script>
 <style>
 :root{
   --bg:#0d0d1a;
@@ -15,6 +62,8 @@
   --text-muted:#8890a8;
   --accent:#39ff14;
   --gold:#ffd35c;
+  --gold-bright:#ffd700;
+  --gold-dim:#8b6914;
   --red:#ff4444;
   --border:rgba(255,255,255,.08);
   --radius:8px;
@@ -30,41 +79,304 @@ body{
 .header{
   position:fixed;top:0;left:0;right:0;z-index:100;
   background:linear-gradient(180deg,#0d0d1a 80%,transparent);
-  padding:6px 12px;display:flex;align-items:center;justify-content:space-between;
-  height:44px;
+  padding:8px 12px;display:flex;align-items:center;justify-content:center;
+  height:64px;
 }
-.header h1{font-size:16px;color:var(--accent);letter-spacing:2px}
-.loyalty-badge{
-  display:flex;align-items:center;gap:6px;font-size:11px;
-  padding:3px 8px;border-radius:12px;
-  border:1px solid var(--border);background:var(--bg-card);
+.header h1{
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:42px;
+  font-weight:900;
+  color:var(--gold-bright);
+  letter-spacing:6px;
+  text-shadow:2px 2px 0 #000,0 0 14px rgba(255,215,0,.55);
+  -webkit-text-stroke:1.5px #1a0a02;
+  paint-order:stroke fill;
+  line-height:1;
+  transform:scaleY(1.15);
+  transform-origin:center top;
 }
-.loyalty-badge .tier-dot{
-  width:8px;height:8px;border-radius:50%;
+@media(max-width:560px){
+  .header{height:48px}
+  .header h1{font-size:28px;letter-spacing:4px}
 }
-.loyalty-badge .tier-label{font-weight:bold}
-.loyalty-badge .player-id{color:var(--text-muted);font-size:10px}
 
 /* Main container */
 .game-wrap{
-  width:100%;max-width:600px;padding:52px 8px 8px;
+  width:100%;max-width:600px;padding:72px 8px 8px;
   display:flex;flex-direction:column;align-items:center;gap:8px;
+  z-index:1;
+}
+@media(max-width:560px){
+  .game-wrap{padding-top:56px}
 }
 
-/* Jackpot tickers */
-.jackpot-bar{
-  display:flex;gap:6px;width:100%;justify-content:center;
+/* === Atmospheric backdrop (shading + faded mural silhouette) === */
+body::before{
+  /* shading gradient — deep navy with subtle top highlight */
+  content:'';
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse at top,rgba(50,80,120,.25) 0%,transparent 60%),
+    linear-gradient(180deg,#0a1822 0%,#050a10 100%);
+}
+body::after{
+  /* faded crossed-swords mural centered behind the game (mask URL injected from icon-data.js) */
+  content:'';
+  position:fixed;
+  top:60px;left:0;right:0;bottom:60px;
+  z-index:0;pointer-events:none;
+  background-color:rgba(212,160,23,.11);
+  -webkit-mask-position:center;mask-position:center;
+  -webkit-mask-size:85% auto;mask-size:85% auto;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+}
+.cabinet-frame{position:relative;z-index:1}
+
+/* Cabinet frame — adds decorative side panels around the game on wider screens.
+   On mobile, only the middle column exists; sides are added at >=900px. */
+.cabinet-frame{
+  width:100%;
+  display:grid;
+  grid-template-columns:minmax(0,600px);
+  justify-content:center;
+  align-items:stretch;
+  position:relative;
+}
+@media(min-width:900px){
+  .cabinet-frame{
+    grid-template-columns:1fr minmax(0,600px) 1fr;
+  }
+}
+.cabinet-side{
+  position:relative;
+  min-height:100%;
+  display:none; /* shown via media query on wider screens */
+  flex-direction:column;
+  align-items:center;
+  padding:72px 4% 12px;
+  gap:12px;
+}
+.cabinet-side-content{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:6px;
+}
+.cabinet-side-content:empty{display:none}
+.cabinet-pile{
+  /* fixed-aspect inner wrapper so glow and icon scale together */
+  position:relative;
+  pointer-events:none;
+  width:100%;
+  max-width:200px;
+  aspect-ratio:1;
+}
+/* LEFT side: gold pile TOP, content panel BOTTOM */
+.cabinet-side-left .cabinet-side-content{margin-top:auto}
+/* RIGHT side: content panel TOP, gold pile BOTTOM */
+.cabinet-side-right .cabinet-pile{margin-top:auto}
+.cabinet-pile::before{
+  /* warm radial glow centered on the coin mass */
+  content:'';
+  position:absolute;
+  inset:-20%;          /* extend beyond the pile in all directions */
+  background:radial-gradient(circle at center,
+    rgba(255,210,80,.7) 0%,
+    rgba(255,180,30,.35) 22%,
+    rgba(255,150,20,.12) 48%,
+    transparent 72%);
+  filter:blur(18px);
+  z-index:0;
+}
+.cabinet-pile::after{
+  /* the gold coin stacks icon — mask URL injected from icon-data.js */
+  content:'';
+  position:absolute;inset:0;
+  background-color:#ffcf3a;
+  -webkit-mask-position:center bottom;
+  mask-position:center bottom;
+  -webkit-mask-size:contain;
+  mask-size:contain;
+  -webkit-mask-repeat:no-repeat;
+  mask-repeat:no-repeat;
+  z-index:1;
+  filter:
+    drop-shadow(0 0 8px rgba(255,200,60,.5))
+    drop-shadow(2px 2px 0 rgba(120,70,0,.5));
+}
+.cabinet-side-right .cabinet-pile::after{
+  transform:scaleX(-1);
+}
+@media(min-width:900px){
+  .cabinet-side{display:flex}
+}
+
+/* === Progressives panel === */
+.progressives-panel{
+  width:100%;max-width:340px;
+  display:flex;flex-direction:column;gap:5px;
+  border:2px solid var(--gold-dim);
+  border-radius:var(--radius);
+  padding:8px;
+  background:linear-gradient(180deg,#1a0d04 0%,#0a0502 100%);
+  box-shadow:inset 0 0 12px rgba(0,0,0,.6);
+}
+.progressives-title{
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:14px;letter-spacing:3px;
+  color:var(--gold-bright);
+  -webkit-text-stroke:.5px #000;
+  paint-order:stroke fill;
+  margin-bottom:2px;
 }
 .jackpot-ticker{
-  flex:1;text-align:center;padding:6px 4px;border-radius:var(--radius);
-  font-size:11px;font-weight:bold;letter-spacing:1px;
-  border:1px solid var(--border);background:var(--bg-card);
+  text-align:center;padding:6px 8px;border-radius:6px;
+  font-weight:bold;
+  border:2px solid var(--border);
+  background:linear-gradient(180deg,#15151f,#0a0a12);
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.6);
 }
-.jackpot-ticker .jp-label{font-size:9px;text-transform:uppercase;display:block;margin-bottom:2px}
-.jackpot-ticker.mini .jp-label{color:#cd7f32}
-.jackpot-ticker.major .jp-label{color:#c0c0c0}
-.jackpot-ticker.grand .jp-label{color:#ffd700}
-.jackpot-ticker .jp-value{font-size:14px}
+.jackpot-ticker .jp-label{
+  font-size:10px;text-transform:uppercase;
+  display:block;margin-bottom:2px;letter-spacing:2px;
+}
+.jackpot-ticker .jp-value{
+  font-size:18px;font-family:'Courier New',monospace;letter-spacing:1px;
+}
+.progressives-panel .jackpot-ticker.grand{border-color:#ffd700}
+.progressives-panel .jackpot-ticker.grand .jp-label{color:#ffd700}
+.progressives-panel .jackpot-ticker.grand .jp-value{font-size:24px;color:#ffd700;text-shadow:0 0 8px rgba(255,215,0,.5)}
+.progressives-panel .jackpot-ticker.major{border-color:#c0c0c0}
+.progressives-panel .jackpot-ticker.major .jp-label{color:#c0c0c0}
+.progressives-panel .jackpot-ticker.major .jp-value{font-size:18px;color:#c0c0c0;text-shadow:0 0 6px rgba(192,192,192,.4)}
+.progressives-panel .jackpot-ticker.mini{border-color:#cd7f32}
+.progressives-panel .jackpot-ticker.mini .jp-label{color:#cd7f32}
+.progressives-panel .jackpot-ticker.mini .jp-value{font-size:14px;color:#cd7f32;text-shadow:0 0 4px rgba(205,127,50,.4)}
+
+/* === Win / Cash / Bet / Denom panel === */
+.win-panel{
+  width:100%;max-width:340px;
+  display:flex;flex-direction:column;gap:5px;
+}
+.win-led-box{
+  background:#0a0a12;
+  border:2px solid #2a2a3a;
+  border-radius:var(--radius);
+  padding:8px 12px;text-align:center;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.5);
+}
+.win-led-label{
+  display:block;font-size:9px;text-transform:uppercase;
+  letter-spacing:2px;color:var(--text-muted);
+}
+.win-led-value{
+  display:block;font-size:32px;font-weight:bold;
+  letter-spacing:2px;color:var(--gold);
+  text-shadow:0 0 8px rgba(255,211,92,.5),0 0 16px rgba(255,211,92,.2);
+  font-family:'Courier New',monospace;
+  min-height:36px;line-height:1;margin-top:2px;
+}
+.win-led-value.win-flash{
+  animation:winFlash 0.8s ease infinite alternate;
+}
+.win-row{display:flex;gap:5px}
+.win-row-box{
+  flex:1;min-width:0;
+  background:#0a0a12;
+  border:2px solid #2a2a3a;
+  border-radius:var(--radius);
+  padding:5px 6px;text-align:center;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+}
+.win-row-box.clickable{
+  cursor:pointer;
+  transition:border-color .15s,background .15s;
+}
+.win-row-box.clickable:hover{
+  border-color:var(--gold);
+  background:#15151f;
+}
+.win-row-box.clickable:active{transform:scale(0.98)}
+.win-row-label{
+  display:block;font-size:8px;text-transform:uppercase;
+  letter-spacing:1.5px;color:var(--text-muted);margin-bottom:2px;
+}
+.win-row-value{
+  display:block;font-size:16px;font-weight:bold;
+  color:#ff3333;letter-spacing:1px;
+  text-shadow:0 0 6px rgba(255,51,51,.4);
+  font-family:'Courier New',monospace;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#cashDisplay,#denomDisplay{
+  color:var(--gold);
+  text-shadow:0 0 6px rgba(255,211,92,.4);
+}
+.loyalty-card-mini{
+  display:flex;align-items:center;gap:6px;font-size:11px;
+  padding:4px 10px;border-radius:6px;
+  border:1px solid var(--border);background:var(--bg-card);
+  justify-content:center;
+}
+.loyalty-card-mini .tier-dot{
+  width:8px;height:8px;border-radius:50%;
+}
+.loyalty-card-mini .tier-label{font-weight:bold}
+.loyalty-card-mini .player-id{color:var(--text-muted);font-size:10px;letter-spacing:.5px}
+
+/* === Reel area: line indicator + reel frame === */
+.reel-area{
+  width:100%;
+  display:flex;align-items:stretch;gap:6px;
+}
+.line-indicator{
+  flex:0 0 28px;
+  display:flex;flex-direction:column;
+}
+.line-stripe-list{
+  flex:1;
+  display:flex;flex-direction:column;gap:1px;
+  border:2px solid var(--gold-dim);
+  border-radius:4px;
+  overflow:hidden;
+  padding:2px;
+  background:#0a0a12;
+}
+.line-stripe{
+  flex:1;
+  border-radius:1px;
+  min-height:3px;
+  transition:filter .25s,box-shadow .25s,transform .25s;
+  opacity:.55;
+}
+.line-stripe.active{
+  opacity:1;
+  filter:brightness(1.4) saturate(1.3);
+  box-shadow:0 0 10px currentColor,inset 0 0 4px rgba(255,255,255,.6);
+  animation:lineStripePulse .5s ease infinite alternate;
+}
+@keyframes lineStripePulse{
+  from{opacity:.85;transform:scaleX(1)}
+  to{opacity:1;transform:scaleX(1.15)}
+}
+.line-indicator-label{
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:10px;line-height:1.05;
+  color:var(--gold);
+  letter-spacing:1px;
+  padding:4px 0 0;
+}
+.line-indicator-label span{
+  display:block;font-size:14px;color:var(--gold-bright);
+}
+@media(max-width:380px){
+  .line-indicator{flex:0 0 20px}
+  .line-indicator-label{font-size:8px}
+  .line-indicator-label span{font-size:11px}
+}
 
 /* Reel grid */
 .reel-frame{
@@ -313,17 +625,6 @@ body{
   display:flex;align-items:center;gap:8px;width:100%;
   padding:4px 0;
 }
-.bet-control{
-  display:flex;align-items:center;gap:4px;font-size:13px;
-}
-.bet-control button{
-  width:28px;height:28px;border:1px solid var(--border);
-  background:var(--bg-card);color:var(--text);border-radius:4px;
-  cursor:pointer;font-size:16px;font-family:inherit;
-}
-.bet-control button:hover{background:var(--bg-hover)}
-.bet-control .bet-val{min-width:30px;text-align:center;font-weight:bold;color:var(--gold)}
-
 .btn-spin{
   flex:1;height:44px;border:none;border-radius:var(--radius);
   background:linear-gradient(135deg,#39ff14,#22cc00);color:#000;
@@ -340,8 +641,6 @@ body{
 .btn-spin.free-spin-btn{
   background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;
 }
-
-.total-bet{font-size:11px;color:var(--text-muted);text-align:right;white-space:nowrap}
 
 /* Free spins counter */
 .free-spins-bar{
@@ -568,38 +867,7 @@ body{
 }
 .btn-reset:hover{background:rgba(255,68,68,.1)}
 
-/* === LED CREDIT DISPLAY === */
-.credit-panel{
-  width:100%;display:flex;gap:8px;align-items:stretch;
-}
-.credit-box{
-  flex:1;background:#0a0a12;border:2px solid #2a2a3a;border-radius:var(--radius);
-  padding:6px 12px;text-align:center;position:relative;
-  box-shadow:inset 0 2px 8px rgba(0,0,0,.5);
-}
-.credit-box .credit-label{
-  font-size:9px;text-transform:uppercase;letter-spacing:2px;
-  color:var(--text-muted);display:block;margin-bottom:2px;
-}
-.credit-box .credit-value{
-  font-size:24px;font-weight:bold;letter-spacing:2px;
-  color:#ff3333;
-  text-shadow:0 0 8px rgba(255,51,51,.5),0 0 16px rgba(255,51,51,.2);
-  font-family:'Courier New',monospace;
-}
-.credit-box.win-box .credit-value{
-  color:var(--gold);
-  text-shadow:0 0 8px rgba(255,211,92,.5),0 0 16px rgba(255,211,92,.2);
-}
-.credit-box .credit-value.ticking{
-  animation:creditTick 0.05s steps(1) infinite;
-}
-@keyframes creditTick{
-  50%{opacity:.7}
-}
-.credit-box .credit-value.win-flash{
-  animation:winFlash 0.8s ease infinite alternate;
-}
+/* Win value flash animation (used by .win-led-value.win-flash) */
 @keyframes winFlash{
   from{opacity:1;text-shadow:0 0 8px rgba(255,211,92,.5)}
   to{opacity:.6;text-shadow:0 0 20px rgba(255,211,92,.8),0 0 40px rgba(255,211,92,.3)}
@@ -749,39 +1017,56 @@ body{
 
 <div class="header">
   <h1>TINKER TIDES</h1>
-  <div class="loyalty-badge" id="loyaltyBadge">
-    <span class="tier-dot" id="tierDot"></span>
-    <span class="tier-label" id="tierLabel">Bronze</span>
-    <span class="player-id" id="playerId">PIRATE #0000</span>
-  </div>
 </div>
 
+<div class="cabinet-frame">
+  <div class="cabinet-side cabinet-side-left">
+    <div class="cabinet-pile"></div>
+    <div class="cabinet-side-content" id="cabinetSlotLeft"></div>
+  </div>
+
 <div class="game-wrap">
-  <!-- Jackpot tickers -->
-  <div class="jackpot-bar">
-    <div class="jackpot-ticker mini">
-      <span class="jp-label">Mini</span>
-      <span class="jp-value" id="jpMini">100</span>
+  <!-- Progressives (relocates to right cabinet TOP on >=900px) -->
+  <div class="progressives-panel" id="progressivesPanel">
+    <div class="progressives-title">PROGRESSIVE</div>
+    <div class="jackpot-ticker grand">
+      <span class="jp-label">Grand</span>
+      <span class="jp-value" id="jpGrand">10,000</span>
     </div>
     <div class="jackpot-ticker major">
       <span class="jp-label">Major</span>
       <span class="jp-value" id="jpMajor">1,000</span>
     </div>
-    <div class="jackpot-ticker grand">
-      <span class="jp-label">Grand</span>
-      <span class="jp-value" id="jpGrand">10,000</span>
+    <div class="jackpot-ticker mini">
+      <span class="jp-label">Mini</span>
+      <span class="jp-value" id="jpMini">100</span>
     </div>
   </div>
 
-  <!-- LED Credit & Win display -->
-  <div class="credit-panel">
-    <div class="credit-box">
-      <span class="credit-label">Credits</span>
-      <span class="credit-value" id="creditDisplay">0</span>
+  <!-- Win / Cash / Bet / Denom + Loyalty (relocates to left cabinet BOTTOM on >=900px) -->
+  <div class="win-panel" id="winPanel">
+    <div class="win-led-box">
+      <span class="win-led-label">Win</span>
+      <span class="win-led-value" id="winLedDisplay"></span>
     </div>
-    <div class="credit-box win-box">
-      <span class="credit-label">Won</span>
-      <span class="credit-value" id="winLedDisplay">0</span>
+    <div class="win-row">
+      <div class="win-row-box">
+        <span class="win-row-label">Cash</span>
+        <span class="win-row-value" id="cashDisplay">$0.00</span>
+      </div>
+      <div class="win-row-box">
+        <span class="win-row-label">Bet</span>
+        <span class="win-row-value" id="betCalcDisplay">20</span>
+      </div>
+      <div class="win-row-box clickable" id="denomBox" title="Tap to change denomination">
+        <span class="win-row-label">Denom</span>
+        <span class="win-row-value" id="denomDisplay">1&cent;</span>
+      </div>
+    </div>
+    <div class="loyalty-card-mini" id="loyaltyBadge">
+      <span class="tier-dot" id="tierDot"></span>
+      <span class="tier-label" id="tierLabel">Bronze</span>
+      <span class="player-id" id="playerId">PIRATE #0000</span>
     </div>
   </div>
 
@@ -790,25 +1075,22 @@ body{
     FREE SPINS: <span id="freeSpinsCount">0</span> remaining (×<span id="freeSpinsMult">2</span>)
   </div>
 
-  <!-- Reel frame -->
-  <div class="reel-frame" id="reelFrame">
-    <div class="reel-grid" id="reelGrid"></div>
-    <div class="payline-overlay" id="paylineOverlay"></div>
-    <div class="cascade-display" id="cascadeDisplay">×1</div>
+  <!-- Reel area: line indicator (left) + reel frame -->
+  <div class="reel-area">
+    <div class="line-indicator" id="lineIndicator">
+      <div class="line-stripe-list" id="lineStripeList"></div>
+      <div class="line-indicator-label"><span id="lineCount">20</span>LINES</div>
+    </div>
+    <div class="reel-frame" id="reelFrame">
+      <div class="reel-grid" id="reelGrid"></div>
+      <div class="payline-overlay" id="paylineOverlay"></div>
+      <div class="cascade-display" id="cascadeDisplay">×1</div>
+    </div>
   </div>
 
-  <!-- Controls -->
+  <!-- Controls — just SPIN; bet is set via DENOM toggle in win-panel -->
   <div class="controls">
-    <div class="bet-control">
-      <span>BET</span>
-      <button id="betDown">−</button>
-      <span class="bet-val" id="betDisplay">1</span>
-      <button id="betUp">+</button>
-    </div>
     <button class="btn-spin" id="spinBtn">SPIN</button>
-    <div class="total-bet">
-      <div>Total: <span id="totalBetDisplay">20</span></div>
-    </div>
   </div>
 
   <!-- Bill inserter -->
@@ -844,6 +1126,12 @@ body{
   </div>
 </div>
 
+  <div class="cabinet-side cabinet-side-right">
+    <div class="cabinet-side-content" id="cabinetSlotRight"></div>
+    <div class="cabinet-pile"></div>
+  </div>
+</div>
+
 <!-- Loyalty card insert overlay -->
 <div class="card-overlay" id="cardOverlay">
   <div class="card-prompt">Insert Loyalty Card</div>
@@ -862,7 +1150,6 @@ body{
   <div class="modal-content" id="modalContent"></div>
 </div>
 
-<script src="icon-data.js"></script>
 <script src="data.js"></script>
 <script src="game.js"></script>
 </body>

@@ -282,11 +282,14 @@ function createIconEl(slug, tier, size) {
 }
 
 function updateUI() {
-  // Credit display with tick-up
-  animateCreditDisplay(Math.floor(state.credits));
+  // CASH display with tick-up (1 credit = 1 cent)
+  animateCashDisplay(Math.floor(state.credits));
 
-  $id('betDisplay').textContent = state.betPerLine;
-  $id('totalBetDisplay').textContent = formatNum(state.betPerLine * NUM_LINES);
+  // BET = denomination × number of lines (in credits)
+  var totalBet = state.betPerLine * NUM_LINES;
+  $id('betCalcDisplay').textContent = formatNum(totalBet);
+  $id('denomDisplay').innerHTML = state.betPerLine + '&cent;';
+
   $id('jpMini').textContent = formatNum(Math.floor(state.jackpots.mini));
   $id('jpMajor').textContent = formatNum(Math.floor(state.jackpots.major));
   $id('jpGrand').textContent = formatNum(Math.floor(state.jackpots.grand));
@@ -305,7 +308,6 @@ function updateUI() {
 
   // Spin button state
   var spinBtn = $id('spinBtn');
-  var totalBet = state.betPerLine * NUM_LINES;
   if (state.freeSpins.active && state.freeSpins.remaining > 0) {
     spinBtn.textContent = 'FREE SPIN (' + state.freeSpins.remaining + ')';
     spinBtn.className = 'btn-spin free-spin-btn';
@@ -321,33 +323,34 @@ function updateUI() {
   }
 }
 
-// ─── Credit display animation ────────────────────────────────────────
-function animateCreditDisplay(target) {
+// ─── Cash display animation (credits → $X.XX) ─────────────────────────
+function formatCash(credits) {
+  return '$' + (credits / 100).toFixed(2);
+}
+
+function animateCashDisplay(target) {
   if (creditTickTimer) clearInterval(creditTickTimer);
-  var el = $id('creditDisplay');
+  var el = $id('cashDisplay');
 
   // Decrement = instant snap
   if (target <= displayedCredits) {
     displayedCredits = target;
-    el.textContent = formatNum(target);
-    el.classList.remove('ticking');
+    el.textContent = formatCash(target);
     return;
   }
 
   // Increment = count up
   var diff = target - displayedCredits;
   var step = Math.max(1, Math.floor(diff / 25));
-  el.classList.add('ticking');
   creditTickTimer = setInterval(function() {
     displayedCredits += step;
     if (displayedCredits >= target) {
       displayedCredits = target;
-      el.textContent = formatNum(target);
-      el.classList.remove('ticking');
+      el.textContent = formatCash(target);
       clearInterval(creditTickTimer);
       creditTickTimer = null;
     } else {
-      el.textContent = formatNum(displayedCredits);
+      el.textContent = formatCash(displayedCredits);
     }
   }, 30);
 }
@@ -360,7 +363,7 @@ function showWinAmount(amount) {
 
 function clearWinAmount() {
   var el = $id('winLedDisplay');
-  el.textContent = '0';
+  el.textContent = '';   // empty (not "0") when nothing won
   el.classList.remove('win-flash');
 }
 
@@ -382,6 +385,7 @@ function updateLoyaltyBadge() {
   $id('playerId').textContent = state.loyalty.playerId;
 }
 
+var cardInsertSkip = false;
 async function showCardInsert() {
   var overlay = $id('cardOverlay');
   var card = $id('loyaltyCard');
@@ -391,18 +395,25 @@ async function showCardInsert() {
   $id('cardTierText').textContent = tier.label.toUpperCase();
   $id('cardTierText').style.color = tier.color;
 
-  // Reset card state
+  // Reset state
+  cardInsertSkip = false;
   card.classList.remove('phase-rise', 'phase-insert');
   overlay.classList.remove('hidden');
-  await sleep(1000);
+
+  async function pause(ms) {
+    var t = 0;
+    while (t < ms && !cardInsertSkip) { await sleep(50); t += 50; }
+  }
+
+  await pause(1000);
 
   // Phase 1: Card rises from below up to just below the reader slot
   card.classList.add('phase-rise');
-  await sleep(1000);
+  await pause(1000);
 
   // Phase 2: Card slides up into the reader slot and disappears
   card.classList.add('phase-insert');
-  await sleep(600);
+  await pause(600);
 
   // Fade out overlay
   overlay.style.transition = 'opacity 0.4s';
@@ -864,10 +875,14 @@ function drawPaylines(wins) {
 
   overlay.textContent = '';
   overlay.appendChild(svg);
+
+  // Light up the corresponding stripes in the line indicator
+  highlightLineStripes(wins);
 }
 
 function clearPaylineOverlay() {
   $id('paylineOverlay').textContent = '';
+  clearLineStripes();
 }
 
 // ─── Free Spins ──────────────────────────────────────────────────────
@@ -1684,6 +1699,42 @@ function wireDebug(id, fn) {
   });
 }
 
+// ─── Line indicator (vertical bar beside reels) ──────────────────────
+function initLineIndicator() {
+  var list = $id('lineStripeList');
+  if (!list) return;
+  list.textContent = '';
+  for (var i = 0; i < NUM_LINES; i++) {
+    var stripe = document.createElement('div');
+    stripe.className = 'line-stripe';
+    stripe.dataset.lineIdx = i;
+    var color = PAYLINE_COLORS[i % PAYLINE_COLORS.length];
+    stripe.style.backgroundColor = color;
+    stripe.style.color = color; // for currentColor in glow box-shadow
+    list.appendChild(stripe);
+  }
+  var lc = $id('lineCount');
+  if (lc) lc.textContent = NUM_LINES;
+}
+
+function highlightLineStripes(wins) {
+  clearLineStripes();
+  if (!wins || !wins.length) return;
+  var seen = {};
+  for (var i = 0; i < wins.length; i++) {
+    var idx = wins[i].lineIndex;
+    if (seen[idx]) continue;
+    seen[idx] = true;
+    var stripe = document.querySelector('.line-stripe[data-line-idx="' + idx + '"]');
+    if (stripe) stripe.classList.add('active');
+  }
+}
+
+function clearLineStripes() {
+  var stripes = document.querySelectorAll('.line-stripe.active');
+  for (var i = 0; i < stripes.length; i++) stripes[i].classList.remove('active');
+}
+
 // ─── Init ────────────────────────────────────────────────────────────
 function init() {
   loadState();
@@ -1691,6 +1742,7 @@ function init() {
   // Sync displayed credits to actual
   displayedCredits = Math.floor(state.credits);
 
+  initLineIndicator();
   currentGrid = generateGrid();
   renderGrid(currentGrid);
   updateUI();
@@ -1698,17 +1750,10 @@ function init() {
   // Spin button
   $id('spinBtn').addEventListener('click', doSpin);
 
-  // Bet controls
-  $id('betDown').addEventListener('click', function() {
+  // Denomination toggle: click cycles through BET_LEVELS (1, 2, 3, 5, 10, 25 cents)
+  $id('denomBox').addEventListener('click', function() {
     if (spinning) return;
-    betLevelIdx = Math.max(0, betLevelIdx - 1);
-    state.betPerLine = BET_LEVELS[betLevelIdx];
-    updateUI();
-    saveState();
-  });
-  $id('betUp').addEventListener('click', function() {
-    if (spinning) return;
-    betLevelIdx = Math.min(BET_LEVELS.length - 1, betLevelIdx + 1);
+    betLevelIdx = (betLevelIdx + 1) % BET_LEVELS.length;
     state.betPerLine = BET_LEVELS[betLevelIdx];
     updateUI();
     saveState();
@@ -1744,10 +1789,24 @@ function init() {
 
   // Loyalty card insert animation on first visit
   if (!state.loyalty.cardInserted) {
-    $id('cardOverlay').classList.remove('hidden');
     showCardInsert();
   } else {
     $id('cardOverlay').classList.add('hidden');
+  }
+
+  // Click anywhere on the card overlay to skip ahead through the animation
+  $id('cardOverlay').addEventListener('click', function() {
+    cardInsertSkip = true;
+  });
+
+  // Click the loyalty badge in the win panel to re-trigger the card insert
+  var badge = $id('loyaltyBadge');
+  if (badge) {
+    badge.style.cursor = 'pointer';
+    badge.title = 'Tap to re-insert your loyalty card';
+    badge.addEventListener('click', function() {
+      showCardInsert();
+    });
   }
 
   // Debug buttons

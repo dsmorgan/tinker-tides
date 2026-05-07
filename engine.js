@@ -27,19 +27,88 @@
     var JACKPOT_CONFIG = data.JACKPOT_CONFIG;
 
     // ─── Reel + grid generation ──────────────────────────────────────
+    // True-reel model: one random stop per reel. The 3 visible cells are
+    // strip[stop], strip[stop+1], strip[stop+2] (modulo strip length). This
+    // makes adjacent symbols on the strip correlated within a column —
+    // key to the authentic "near-miss" feel of a real cabinet.
     function randomSymbolFromReel(reelIdx) {
       var strip = REEL_STRIPS[reelIdx];
       return strip[Math.floor(Math.random() * strip.length)];
     }
 
-    function generateGrid() {
+    // ─── Boosted reel-5 strip ────────────────────────────────────────
+    // When reels 0-3 form a 4-of-a-kind on any payline, reel 4 (the 5th reel)
+    // gets swapped to a boosted 14-cell strip with 2 wilds + 2 of the target
+    // symbol = 1/7 each. Per-cell hit chance for {wild OR target} jumps from
+    // ~6% (normal) to ~28%, ~5× boost — gives the player a real payoff for
+    // the suspense of reel 4's anticipation hit.
+    function findBoostTarget(grid03) {
+      var bestSym = null;
+      var bestPay = 0;
+      for (var li = 0; li < PAYLINES.length; li++) {
+        var line = PAYLINES[li];
+        var base = null;
+        var matched = true;
+        for (var r = 0; r < 4; r++) {
+          var s = grid03[r][line[r]];
+          if (s === 'scatter' || s === 'bonus') { matched = false; break; }
+          if (s !== 'wild') {
+            if (base === null) base = s;
+            else if (s !== base) { matched = false; break; }
+          }
+        }
+        if (!matched || base === null) continue; // skip lines that are all-wild or broken
+        var sd = SYMBOLS[base];
+        if (!sd || !sd.pay) continue;
+        var pay5 = sd.pay[4] || 0;
+        if (pay5 > bestPay) { bestPay = pay5; bestSym = base; }
+      }
+      return bestSym;
+    }
+
+    function buildBoostedStrip(targetSym) {
+      // 14 positions; target at 0,7; wild at 4,11 → 2/14 each = 1/7 each.
+      // Fillers are everyday low/mid-pays so the wheel still "looks normal"
+      // when it's spinning.
+      var f = ['compass','anchor','rum','cannon','parrot','ship','hat','swords','compass','rum'];
+      return [
+        targetSym, f[0], f[1], f[2], 'wild', f[3], f[4],
+        targetSym, f[5], f[6], f[7], 'wild', f[8], f[9],
+      ];
+    }
+
+    function generateSpin() {
       var grid = [];
-      for (var r = 0; r < REELS; r++) {
+      var stops = [];
+      var strips = []; // strip used per reel — REEL_STRIPS[r] or boosted
+      // Reels 0-3: normal strips
+      for (var r = 0; r < 4; r++) {
+        var strip = REEL_STRIPS[r];
+        var stop = Math.floor(Math.random() * strip.length);
+        stops.push(stop);
+        strips.push(strip);
         var col = [];
-        for (var row = 0; row < ROWS; row++) col.push(randomSymbolFromReel(r));
+        for (var row = 0; row < ROWS; row++) {
+          col.push(strip[(stop + row) % strip.length]);
+        }
         grid.push(col);
       }
-      return grid;
+      // Reel 4: boosted strip if reels 0-3 form a 4-of-a-kind
+      var boost = findBoostTarget(grid);
+      var strip4 = boost ? buildBoostedStrip(boost) : REEL_STRIPS[4];
+      var stop4 = Math.floor(Math.random() * strip4.length);
+      stops.push(stop4);
+      strips.push(strip4);
+      var col4 = [];
+      for (var row = 0; row < ROWS; row++) {
+        col4.push(strip4[(stop4 + row) % strip4.length]);
+      }
+      grid.push(col4);
+      return { grid: grid, stops: stops, strips: strips, boost: boost };
+    }
+
+    function generateGrid() {
+      return generateSpin().grid;
     }
 
     // ─── Payline evaluation ──────────────────────────────────────────
@@ -65,7 +134,9 @@
           break;
         }
       }
-      if (count < 3) return null;
+      // Allow 2-of-a-kind matches; symbols whose pay[1] is 0 will still bail
+      // at the payout === 0 check below. Only the lowest tier opts in via data.js.
+      if (count < 2) return null;
       var symDef = SYMBOLS[baseSymbol];
       if (!symDef) return null;
       var payout = symDef.pay[count - 1] || 0;
@@ -138,9 +209,19 @@
     function runSpin(opts) {
       opts = opts || {};
       var freeSpinMult = opts.freeSpinMult || 1;
-      var grid = opts.fixedGrid
-        ? opts.fixedGrid.map(function(c) { return c.slice(); })
-        : generateGrid();
+      var grid, stops, strips, boost;
+      if (opts.fixedGrid) {
+        grid = opts.fixedGrid.map(function(c) { return c.slice(); });
+        stops = null; // forced grid → stop positions unknown
+        strips = null;
+        boost = null;
+      } else {
+        var sp = generateSpin();
+        grid = sp.grid;
+        stops = sp.stops;
+        strips = sp.strips;
+        boost = sp.boost;
+      }
 
       var scatterResult = countSymbol(grid, 'scatter');
       var bonusResult = checkBonusTrigger(grid);
@@ -152,9 +233,18 @@
         totalUnits += wins[wi].payout * freeSpinMult;
       }
 
+      var maxLineCount = 0;
+      for (var ww = 0; ww < wins.length; ww++) {
+        if (wins[ww].count > maxLineCount) maxLineCount = wins[ww].count;
+      }
+
       return {
         grid: grid,
+        stops: stops,
+        strips: strips,
+        boost: boost,
         wins: wins,
+        maxLineCount: maxLineCount,
         paylineWinUnits: totalUnits,
         scatterCount: scatterResult.count,
         bonusTriggered: bonusResult.triggered,
@@ -319,6 +409,7 @@
       // Pure game functions (used by both game.js and simulate.js)
       randomSymbolFromReel: randomSymbolFromReel,
       generateGrid: generateGrid,
+      generateSpin: generateSpin,
       evaluateLine: evaluateLine,
       evaluatePaylines: evaluatePaylines,
       countSymbol: countSymbol,
@@ -342,7 +433,6 @@
     globalNS.Engine = createEngine({
       REELS: REELS, ROWS: ROWS, NUM_LINES: NUM_LINES,
       SYMBOLS: SYMBOLS, PAYLINES: PAYLINES, REEL_STRIPS: REEL_STRIPS,
-      CASCADE_MULTIPLIERS: CASCADE_MULTIPLIERS,
       FREE_SPINS_CONFIG: FREE_SPINS_CONFIG,
       TREASURE_HUNT_CONFIG: TREASURE_HUNT_CONFIG,
       WHEEL_SEGMENTS: WHEEL_SEGMENTS,

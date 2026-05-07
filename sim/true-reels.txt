@@ -1,0 +1,51 @@
+# Tinker Tides — RTP simulation (TRUE REELS)
+# Generated: 2026-05-06
+# Diff vs no-cascade.txt: reel strips rebuilt with structured placement
+# (rare symbols spread, low-pays clustered) AND grid generation switched
+# from per-cell random pick → one stop position per reel + 3 consecutive
+# cells (real cabinet behavior). Per-symbol odds unchanged; same-column
+# correlation introduced. Strips also now hand-tuned for spacing of rares.
+# Command: node simulate.js 10000000 --quiet
+#
+# Notable shifts:
+#   RTP:           55.09% → 55.23%   (≈ flat)
+#   Hit frequency: 23.81% → 12.87%   (almost halved — more "blank" spins)
+#   Biggest win:   14,051× → 25,056× bet  (more upside)
+#   Win-size mix: shifted RIGHT — fewer Tiny wins, more Small/Mid/Big/Huge/Mega
+#   Free spin RTP: 1.90% → 1.24%   (fewer 3+ scatters since scatters are now spread)
+#
+═══ Tinker Tides RTP simulation ════════════════════════════
+Spins:                            10,000,000   (10.0s, 1,003,009 spins/s)
+Total wagered (credits):         200,000,000
+Total returned:                  110,457,259
+────────────────────────────────────────────────────────────
+RTP:                                 55.229%
+Hit frequency:                        12.87%
+Biggest win:                         501,120 credits  (25056× bet)
+
+── Win-size distribution (% of paying spins) ───────────────
+Tiny    (< 1× bet):                66.298%
+Small   (1–5× bet):                29.110%
+Mid     (5–25× bet):                2.892%
+Big     (25–100× bet):              0.987%
+Huge    (100–500× bet):             0.526%
+Mega    (500×+ bet):                0.187%
+
+── Bonus trigger frequency ─────────────────────────────────
+Free spins (3+ scatter):            0.724%   1 in 138
+Wheel of Fortune:                   0.079%   1 in 1,269
+Treasure Hunt:                      0.209%   1 in 478
+
+── Jackpot trigger frequency ───────────────────────────────
+Mini:                                22073   1 in 453
+Major:                                5055   1 in 1,978
+Grand:                                1077   1 in 9,285
+
+── RTP contribution by source ──────────────────────────────
+Paylines:                          10.036%
+Free spins:                         1.236%
+Wheel of Fortune:                   4.178%
+Treasure Hunt:                     30.937%
+Random progressives:                8.841%
+TOTAL:                             55.229%
+

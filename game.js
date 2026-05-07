@@ -23,7 +23,7 @@ function defaultState() {
       major: JACKPOT_CONFIG.major.start,
       grand: JACKPOT_CONFIG.grand.start,
     },
-    freeSpins: { active: false, remaining: 0, multiplier: 1 },
+    freeSpins: { active: false, remaining: 0, multiplier: 1, sessionWin: 0 },
     loyalty: {
       playerId: generatePlayerId(),
       cardInserted: false,
@@ -71,6 +71,7 @@ function loadState() {
       if (!(jk in saved.jackpots)) saved.jackpots[jk] = def.jackpots[jk];
     }
     if (!saved.freeSpins) saved.freeSpins = def.freeSpins;
+    if (saved.freeSpins.sessionWin === undefined) saved.freeSpins.sessionWin = 0;
     if (!saved.loyalty) saved.loyalty = def.loyalty;
     if (!saved.loyalty.playerId) saved.loyalty.playerId = generatePlayerId();
     if (saved.totalInserted === undefined) saved.totalInserted = 0;
@@ -96,6 +97,7 @@ function iconHTML(slug, tier, size) {
 // rest of game.js can keep calling them by their bare names.
 var randomSymbolFromReel = Engine.randomSymbolFromReel;
 var generateGrid         = Engine.generateGrid;
+var generateSpin         = Engine.generateSpin;
 var evaluateLine         = Engine.evaluateLine;
 var evaluatePaylines     = Engine.evaluatePaylines;
 var countSymbol          = Engine.countSymbol;
@@ -169,6 +171,10 @@ function createIconEl(slug, tier, size) {
     el.style.maskRepeat = 'no-repeat';
     el.style.webkitMaskPosition = 'center';
     el.style.maskPosition = 'center';
+    // Default white-ish background so the icon is visible OUTSIDE a .symbol-cell
+    // (e.g. in the paytable list). Inside the reels, .symbol-cell .sym-icon's
+    // CSS rule re-applies the same gradient (and per-symbol overrides use !important).
+    el.style.background = 'radial-gradient(circle,#fff,#ddd)';
   } else {
     el.style.background = '#333';
     el.style.borderRadius = '4px';
@@ -201,10 +207,11 @@ function updateUI() {
   // Loyalty badge
   updateLoyaltyBadge();
 
-  // Spin button state
+  // Spin button state. Circular layout — use innerHTML with line breaks
+  // so "FREE SPIN" + remaining count stack vertically inside the circle.
   var spinBtn = $id('spinBtn');
   if (state.freeSpins.active && state.freeSpins.remaining > 0) {
-    spinBtn.textContent = 'FREE SPIN (' + state.freeSpins.remaining + ')';
+    spinBtn.innerHTML = 'FREE SPIN<br>' + state.freeSpins.remaining;
     spinBtn.className = 'btn-spin free-spin-btn';
     spinBtn.disabled = spinning;
   } else if (state.credits < totalBet) {
@@ -325,30 +332,17 @@ async function showCardInsert() {
 }
 
 // ─── Bill inserter ───────────────────────────────────────────────────
+// Brief "inserting" pulse on the Insert button (slot UI is built into the
+// button itself), then add credits. The old standalone bill-inserter slot
+// + flying-bill animation was removed when the spin row absorbed the button.
 async function insertBill() {
   if (billInserting) return;
   billInserting = true;
 
-  var billAnim = $id('billAnim');
-  // Reset
-  billAnim.classList.remove('phase-slide', 'phase-eat');
-  billAnim.style.opacity = '';
-  billAnim.style.display = 'flex';
-  await sleep(50);
-
-  // Phase 1: bill slides up to the slot opening
-  billAnim.classList.add('phase-slide');
-  await sleep(700);
-
-  // Phase 2: bill gets eaten into the machine (slides further up, fades)
-  billAnim.classList.remove('phase-slide');
-  billAnim.classList.add('phase-eat');
-  await sleep(600);
-
-  // Hide and reset
-  billAnim.style.display = 'none';
-  billAnim.classList.remove('phase-eat');
-  billAnim.style.opacity = '';
+  var insertBtn = $id('insertBtn');
+  if (insertBtn) insertBtn.classList.add('inserting');
+  await sleep(650);
+  if (insertBtn) insertBtn.classList.remove('inserting');
 
   // Add credits
   state.credits += BILL_VALUE;
@@ -364,10 +358,42 @@ function formatNum(n) {
 }
 
 // ─── Spin Animation ──────────────────────────────────────────────────
+// Outer wrapper: kicks off the first spin, then auto-plays remaining free
+// spins until the session ends (waits for the win showcase between spins).
 async function doSpin() {
   if (spinning) return;
   spinning = true;
 
+  var lastWinCount = await singleSpin();
+
+  while (state.freeSpins.active && state.freeSpins.remaining > 0) {
+    // Wait for at least one full phase-3 showcase cycle if the previous spin
+    // had wins, otherwise a brief breather between dry free spins.
+    var waitMs;
+    if (lastWinCount > 0) {
+      waitMs = lastWinCount * (SHOWCASE_FADE_MS + SHOWCASE_LINE_MS)
+             + (SHOWCASE_FADE_MS + SHOWCASE_ALL_MS)
+             + (SHOWCASE_FADE_MS + SHOWCASE_BLANK_MS);
+    } else {
+      waitMs = 800;
+    }
+    await sleep(waitMs);
+    lastWinCount = await singleSpin();
+  }
+
+  spinning = false;
+  updateUI(); // re-enable Spin button (singleSpin's last updateUI ran while spinning=true)
+
+  // Player broke? Only matters once free spins are over.
+  if (!state.freeSpins.active && state.credits < BET_LEVELS[0] * NUM_LINES) {
+    showRefillPrompt();
+  }
+}
+
+// One spin (paid or free, depending on current state). Returns the number of
+// winning paylines so doSpin's auto-loop knows how long to wait before the
+// next spin's win showcase has cycled at least once.
+async function singleSpin() {
   var isFree = state.freeSpins.active && state.freeSpins.remaining > 0;
   var totalBet = state.betPerLine * NUM_LINES;
 
@@ -375,11 +401,10 @@ async function doSpin() {
     if (state.credits < totalBet) {
       spinning = false;
       showRefillPrompt();
-      return;
+      return 0;
     }
     state.credits -= totalBet;
     state.totalBet += totalBet;
-    // Contribute to jackpots
     for (var key in JACKPOT_CONFIG) {
       state.jackpots[key] += totalBet * JACKPOT_CONFIG[key].contribution;
     }
@@ -388,25 +413,24 @@ async function doSpin() {
   }
 
   state.totalSpins++;
-  clearWinAmount();
+  cancelWinShowcase();
+  clearTriggerGlow();
+  // During free spins, KEEP the Win display showing the running session total
+  // (sessionWin) — only clear it on paid spins.
+  if (!isFree) clearWinAmount();
   clearPaylineOverlay();
   updateUI();
   saveState();
 
-  // Generate new grid
-  currentGrid = generateGrid();
+  var spinResult = generateSpin();
+  currentGrid = spinResult.grid;
+  await animateReels(currentGrid, spinResult.stops, spinResult.strips);
 
-  // Animate reels
-  await animateReels(currentGrid);
+  var processResult = await processSpinResult(currentGrid, isFree);
 
-  // Process results
-  await processSpinResult(currentGrid, isFree);
-
-  spinning = false;
   updateUI();
   saveState();
 
-  // Check if free spins just ended
   if (state.freeSpins.active && state.freeSpins.remaining <= 0) {
     state.freeSpins.active = false;
     state.freeSpins.remaining = 0;
@@ -415,10 +439,7 @@ async function doSpin() {
     saveState();
   }
 
-  // Check if player is broke
-  if (!state.freeSpins.active && state.credits < BET_LEVELS[0] * NUM_LINES) {
-    showRefillPrompt();
-  }
+  return processResult ? processResult.winCount : 0;
 }
 
 // Check if reel r has a partial match building from left
@@ -454,7 +475,7 @@ function easeOutCubic(t) {
   return t1 * t1 * t1 + 1;
 }
 
-async function animateReels(targetGrid) {
+async function animateReels(targetGrid, stops, strips) {
   var container = $id('reelGrid');
   container.textContent = '';
 
@@ -480,11 +501,22 @@ async function animateReels(targetGrid) {
     var extraCount = 30 + r * 8;
     if (anticipation[r]) extraCount += 15;
 
+    // Build the visible strip as a contiguous slice of the actual reel strip,
+    // ending at the target stop position. The blur cells the user sees while
+    // spinning are exactly the cells preceding `stop` on the strip — so the
+    // reel really does look like a single strip rolling past.
+    // Per-reel strip: usually REEL_STRIPS[r], but reel 4 may carry a boosted
+    // strip when the engine swapped it in (4-of-a-kind through reels 0-3).
+    var reelStrip = (strips && strips[r]) ? strips[r] : REEL_STRIPS[r];
+    var stripLen = reelStrip.length;
+    var stop = (stops && stops[r] != null) ? stops[r] : 0;
+
     for (var i = 0; i < extraCount; i++) {
-      var symId = randomSymbolFromReel(r);
-      strip.appendChild(makeSpinCell(symId, cellH));
+      // i=0 → strip[stop - extraCount], i=extraCount-1 → strip[stop - 1]
+      var idx = (((stop - extraCount + i) % stripLen) + stripLen) % stripLen;
+      strip.appendChild(makeSpinCell(reelStrip[idx], cellH));
     }
-    // Target 3 at the end
+    // Target 3 at the end (= strip[stop], strip[stop+1], strip[stop+2])
     for (var row = 0; row < ROWS; row++) {
       strip.appendChild(makeSpinCell(targetGrid[r][row], cellH));
     }
@@ -492,9 +524,18 @@ async function animateReels(targetGrid) {
     col.appendChild(strip);
     container.appendChild(col);
 
-    // Stop time: reel 0 at 1.2s, each next +0.4s, anticipation +0.8s
-    var stopTime = 1200 + r * 400;
-    if (anticipation[r]) stopTime += 800;
+    // Stop time is sequential: each reel stops at least 400ms after the
+    // previous one, guaranteeing later reels are still spinning while an
+    // earlier reel is in its anticipation tail. Anticipation adds extra
+    // time AFTER the previous reel stops — reel 3 (+3.0s) and reel 4
+    // (+5.4s), so the 5th reel feels noticeably more tense.
+    var stopTime;
+    if (r === 0) {
+      stopTime = 1200;
+    } else {
+      stopTime = cols[r - 1].stopTime + 400;
+      if (anticipation[r]) stopTime += (r === 3) ? 3000 : 5400;
+    }
 
     cols.push({
       col: col,
@@ -509,8 +550,15 @@ async function animateReels(targetGrid) {
 
   // JS-driven reel animation using requestAnimationFrame
   var startTime = performance.now();
-  // Total animation = longest reel stopTime + 300ms for bounce settle
-  var totalDuration = cols[REELS - 1].stopTime + 300;
+  // Total animation = MAX reel stopTime + 300ms for bounce settle. Earlier
+  // versions used cols[REELS - 1].stopTime, but that was wrong when reel 3
+  // anticipates and reel 4 doesn't — reel 3 then ends up being the longest
+  // and gets cut off mid-animation.
+  var maxStopTime = 0;
+  for (var i = 0; i < cols.length; i++) {
+    if (cols[i].stopTime > maxStopTime) maxStopTime = cols[i].stopTime;
+  }
+  var totalDuration = maxStopTime + 300;
 
   // Speed: pixels per ms during full-speed phase
   var spinSpeed = 3.0; // fast scroll
@@ -538,8 +586,10 @@ async function animateReels(targetGrid) {
           var scrollPx = (elapsed * speed) % (c.extraCount * cellH);
           c.strip.style.transform = 'translateY(' + (-scrollPx) + 'px)';
 
-          // Add anticipation glow in last 40% for near-win reels
-          if (c.anticipation && reelProgress > 0.6) {
+          // Anticipation glow kicks in once the previous reel has begun
+          // stopping (so reel 3's tension shows after reel 2 settles, and
+          // reel 4's tension shows after reel 3 settles).
+          if (c.anticipation && r > 0 && elapsed > cols[r - 1].stopTime) {
             c.col.classList.add('anticipation');
           }
         } else {
@@ -593,45 +643,130 @@ async function processSpinResult(grid, isFree) {
   if (scatterResult.count >= 3) {
     await triggerFreeSpins(scatterResult, isFree);
   }
+  // Bonus wins (Wheel of Fortune, Treasure Hunt) get collected first and
+  // then APPENDED to the payline winData so they flow through the same
+  // Phase 1/2/3 display — each one shows up as a callout with no payline lit.
+  var bonusWins = [];
+
   var bonusResult = checkBonusTrigger(grid);
   if (bonusResult.triggered) {
     state.stats.bonusesTriggered++;
-    await triggerWheelOfFortune();
+    // Glow EVERY ship-wheel on the grid so it's visually clear which symbols
+    // earned the wheel bonus. The glow stays through the wheel modal and
+    // clears at the next spin's pre-cleanup (clearTriggerGlow in singleSpin).
+    var allBonus = countSymbol(grid, 'bonus');
+    setTriggerGlow(allBonus.positions);
+    var wheelOutcome = await triggerWheelOfFortune();
+    if (wheelOutcome && wheelOutcome.amount > 0) {
+      bonusWins.push({ bonus: true, label: wheelOutcome.label, amount: wheelOutcome.amount });
+    }
   }
   var treasureResult = checkTreasureHunt(grid);
   if (treasureResult.triggered) {
     state.stats.bonusesTriggered++;
-    await triggerTreasureHunt();
+    var thOutcome = await triggerTreasureHunt();
+    if (thOutcome && thOutcome.amount > 0) {
+      bonusWins.push({ bonus: true, label: thOutcome.label, amount: thOutcome.amount });
+    }
   }
 
   // Single payline evaluation (no cascade)
   var wins = evaluatePaylines(grid);
-  var totalWin = 0;
-  var hlPositions = [];
-  if (wins.length > 0) {
-    var winPosSet = {};
+
+  if (wins.length > 0 || bonusWins.length > 0) {
+    // Compute per-line amounts. Wins come back ordered by lineIndex (top→bottom).
+    // Bonus wins (wheel/TH) are appended at the end of winData so they show
+    // last in the showcase — typically the biggest single payout of the spin.
+    var winData = [];
+    var totalWin = 0;
     for (var wi = 0; wi < wins.length; wi++) {
-      var win = wins[wi];
-      totalWin += win.payout * state.betPerLine * freeSpinMult;
-      for (var pi = 0; pi < win.count; pi++) {
-        var pos = win.positions[pi];
-        winPosSet[pos.reel + ',' + pos.row] = true;
+      var amount = wins[wi].payout * state.betPerLine * freeSpinMult;
+      totalWin += amount;
+      winData.push({ win: wins[wi], amount: amount });
+    }
+    for (var bwi = 0; bwi < bonusWins.length; bwi++) {
+      totalWin += bonusWins[bwi].amount;
+      winData.push(bonusWins[bwi]);
+    }
+
+    // Render grid once with all winning cells highlighted (no re-render between
+    // phase 2 steps — we toggle .win-highlight via setWinHighlight).
+    var allHighlights = [];
+    for (var wi2 = 0; wi2 < wins.length; wi2++) {
+      for (var pi2 = 0; pi2 < wins[wi2].count; pi2++) {
+        allHighlights.push(wins[wi2].positions[pi2]);
       }
     }
-    for (var key in winPosSet) {
-      var parts = key.split(',');
-      hlPositions.push({ reel: parseInt(parts[0]), row: parseInt(parts[1]) });
-    }
-    renderGrid(grid, hlPositions);
-    drawPaylines(wins);
-    await sleep(800);
-  }
+    renderGrid(grid, allHighlights);
 
-  if (totalWin > 0) {
+    // Phase 1: rapid top-to-bottom sweep (multi-line wins only). For each
+    // step we re-draw the paylines with one more win added — so by the end of
+    // the sweep, every payline is on the grid and every indicator stripe is lit.
+    // Bonus entries have no payline, so they're skipped in this phase.
+    var paylineEntries = winData.filter(function(w) { return !w.bonus; });
+    if (paylineEntries.length > 1) {
+      clearLineStripes();
+      clearPaylineOverlay();
+      var accumWins = [];
+      for (var p1 = 0; p1 < paylineEntries.length; p1++) {
+        accumWins.push(paylineEntries[p1].win);
+        drawPaylines(accumWins); // also re-lights the indicator stripes
+        await sleep(80);
+      }
+      await sleep(1200); // dwell with all lines + indicators visible
+      clearLineStripes();
+      clearPaylineOverlay();
+      await sleep(150);
+    }
+
+    // Phase 2: showcase each entry one at a time. Win + Cash count up per-entry.
+    // During free spins, the Win counter accumulates across the whole session
+    // — start each spin's tick-up from where sessionWin left off.
+    // For bonus entries (wheel / treasure hunt) we skip the cell highlight + payline
+    // overlay — only the callout shows ("Wheel of Fortune: 250 credits").
+    var preSessionWin = isFree ? (state.freeSpins.sessionWin || 0) : 0;
+    var preWinCredits = state.credits;
+    var accumulated = 0;
+    for (var p2 = 0; p2 < winData.length; p2++) {
+      var item = winData[p2];
+      var label;
+      if (item.bonus) {
+        setWinHighlight(null);
+        clearPaylineOverlay();
+        label = item.label + ': ' + formatNum(Math.floor(item.amount)) + ' credits';
+      } else {
+        var lineHl = item.win.positions.slice(0, item.win.count);
+        setWinHighlight(lineHl);
+        drawPaylines([item.win]);
+        label = item.win.count + ' ' +
+                displaySymbolName(item.win.symbol, item.win.count) + ', ' +
+                formatNum(Math.floor(item.amount)) + ' credits';
+      }
+      showWinLineCallout(label);
+
+      var winFrom = accumulated;
+      var winTo   = accumulated + item.amount;
+      tickUp('winLedDisplay', preSessionWin + winFrom, preSessionWin + winTo, 380,
+        function(v) { return formatNum(Math.floor(v)); });
+      tickUp('cashDisplay', preWinCredits + winFrom, preWinCredits + winTo, 380, formatCash);
+      accumulated = winTo;
+
+      await sleep(400);
+    }
+
+    // Commit state and settle displays
     state.credits += totalWin;
     state.totalWon += totalWin;
     if (totalWin > state.stats.biggestWin) state.stats.biggestWin = totalWin;
-    showWinAmount(totalWin);
+    displayedCredits = Math.floor(state.credits);
+    if (isFree) state.freeSpins.sessionWin = preSessionWin + totalWin;
+    var displayedWin = isFree ? state.freeSpins.sessionWin : totalWin;
+    showWinAmount(displayedWin); // ensures win-flash class applied after the tick-up
+    await sleep(300);
+
+    // Phase 3: keep cycling through each winning line + callout until the
+    // next spin (cancelWinShowcase is called from doSpin's pre-spin cleanup).
+    startWinShowcase(winData);
   }
 
   if (!isFree) {
@@ -639,6 +774,10 @@ async function processSpinResult(grid, isFree) {
   }
 
   currentGrid = grid;
+  // Entry count drives doSpin's auto-play sleep (one showcase cycle worth).
+  // Bonus wins also display in the showcase, so include them in the count.
+  var entryCount = wins.length + bonusWins.length;
+  return { winCount: entryCount, totalWin: entryCount > 0 ? totalWin : 0 };
 }
 
 // ─── Payline overlay ─────────────────────────────────────────────────
@@ -705,6 +844,7 @@ async function triggerFreeSpins(scatterResult, isDuringFreeSpins) {
     state.freeSpins.active = true;
     state.freeSpins.remaining = spinsAwarded;
     state.freeSpins.multiplier = FREE_SPINS_CONFIG.baseMultiplier;
+    state.freeSpins.sessionWin = 0; // fresh session — reset cumulative win counter
     showNotification(spinsAwarded + ' FREE SPINS!', 'free-spins-notify');
   }
   await sleep(2000);
@@ -802,28 +942,35 @@ function openTreasureHunt(onComplete) {
     }
     wrap.appendChild(grid);
 
-    if (finished) {
-      var finalPrize = Math.floor(totalPrize * multiplier);
-      var finalDiv = document.createElement('div');
-      finalDiv.className = 'treasure-total';
-      finalDiv.style.fontSize = '22px';
-      finalDiv.textContent = 'TOTAL WIN: ' + formatNum(finalPrize) + ' credits';
-      wrap.appendChild(finalDiv);
+    // Always render the final-total + COLLECT footer so the modal height is
+    // identical whether we're mid-hunt or finished. We just hide it (via
+    // visibility, which keeps the layout box) until `finished` is true.
+    var footer = document.createElement('div');
+    footer.className = 'treasure-footer';
+    if (!finished) footer.style.visibility = 'hidden';
 
-      var closeBtn = document.createElement('button');
-      closeBtn.className = 'modal-close';
-      closeBtn.textContent = 'COLLECT';
-      closeBtn.addEventListener('click', function() {
-        state.credits += finalPrize;
-        state.totalWon += finalPrize;
-        if (finalPrize > state.stats.biggestWin) state.stats.biggestWin = finalPrize;
-        modal.classList.add('hidden');
-        updateUI();
-        saveState();
-        onComplete();
-      });
-      wrap.appendChild(closeBtn);
-    } else {
+    var finalPrize = Math.floor(totalPrize * multiplier);
+    var finalDiv = document.createElement('div');
+    finalDiv.className = 'treasure-total';
+    finalDiv.style.fontSize = '22px';
+    finalDiv.textContent = 'TOTAL WIN: ' + formatNum(finalPrize) + ' credits';
+    footer.appendChild(finalDiv);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close';
+    closeBtn.textContent = 'COLLECT';
+    closeBtn.addEventListener('click', function() {
+      if (!finished) return; // safety — shouldn't fire while hidden, but guard anyway
+      modal.classList.add('hidden');
+      // Hand the prize to the caller (processSpinResult) so it can be
+      // counted into Win/Cash via the same tick-up flow as paylines.
+      onComplete({ amount: finalPrize, label: 'Treasure Hunt' });
+    });
+    footer.appendChild(closeBtn);
+
+    wrap.appendChild(footer);
+
+    if (!finished) {
       var unopened = wrap.querySelectorAll('.treasure-chest:not(.opened)');
       for (var ui = 0; ui < unopened.length; ui++) {
         (function(el) {
@@ -942,6 +1089,23 @@ function openWheel(onComplete) {
   spinBtn.textContent = 'SPIN THE WHEEL';
   wrap.appendChild(spinBtn);
 
+  // Pre-allocate the CONTINUE button so the modal doesn't reflow after the
+  // wheel resolves. Hidden via visibility (still occupies space) until
+  // resolveWheelResult flips it visible. The amount won is stashed on
+  // `pendingResult` so the close handler can hand it to onComplete — that
+  // lets processSpinResult flow it through the normal Win/Cash tick-up.
+  var pendingResult = { amount: 0, label: 'Wheel of Fortune' };
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.id = 'wheelCloseBtn';
+  closeBtn.textContent = 'CONTINUE';
+  closeBtn.style.visibility = 'hidden';
+  closeBtn.addEventListener('click', function() {
+    $id('modal').classList.add('hidden');
+    onComplete({ amount: pendingResult.amount, label: pendingResult.label });
+  });
+  wrap.appendChild(closeBtn);
+
   contentEl.appendChild(wrap);
 
   var ctx = canvas.getContext('2d');
@@ -1050,6 +1214,7 @@ function openWheel(onComplete) {
 
   spinBtn.addEventListener('click', function doWheelSpin() {
     spinBtn.disabled = true;
+    spinBtn.style.visibility = 'hidden';
     var resultIdx = Math.floor(Math.random() * segments.length);
 
     // Single dramatic clockwise spin, ~8 seconds, smooth deceleration
@@ -1078,23 +1243,27 @@ function openWheel(onComplete) {
       if (t < 1) {
         requestAnimationFrame(animate);
       } else {
-        resolveWheelResult(segments[resultIdx], onComplete);
+        resolveWheelResult(segments[resultIdx], pendingResult, spinBtn, onComplete);
       }
     }
     requestAnimationFrame(animate);
   });
 }
 
-async function resolveWheelResult(segment, onComplete) {
+// Records the wheel outcome into pendingResult so the CONTINUE button can
+// hand it to onComplete (and processSpinResult routes it through the normal
+// Win/Cash tick-up). The credit add is NOT done here — done later via the
+// payline-style flow so the user sees the amount tick into Win and Cash
+// after the modal closes.
+async function resolveWheelResult(segment, pendingResult, spinBtn, onComplete) {
   var resultEl = $id('wheelResult');
   var totalBet = state.betPerLine * NUM_LINES;
 
   switch (segment.type) {
     case 'coins':
       var amount = segment.value * totalBet;
-      state.credits += amount;
-      state.totalWon += amount;
-      if (amount > state.stats.biggestWin) state.stats.biggestWin = amount;
+      pendingResult.amount = amount;
+      pendingResult.label = 'Wheel of Fortune';
       resultEl.textContent = 'WIN: ' + formatNum(Math.floor(amount)) + ' credits!';
       break;
     case 'freespins':
@@ -1109,15 +1278,22 @@ async function resolveWheelResult(segment, onComplete) {
         state.freeSpins.multiplier = FREE_SPINS_CONFIG.baseMultiplier;
       }
       resultEl.textContent = segment.value + ' FREE SPINS!';
+      // Free spins don't add credits — left at amount=0 so processSpinResult
+      // skips the bonus-win flow (it filters on amount > 0).
       break;
     case 'respin':
       resultEl.textContent = 'SPIN AGAIN!';
       await sleep(1500);
-      $id('wheelSpinBtn').disabled = false;
+      // Re-show + re-enable the spin button for the respin
+      spinBtn.style.visibility = 'visible';
+      spinBtn.disabled = false;
       return;
     case 'jackpot':
       resultEl.textContent = 'JACKPOT CHANCE!';
       await sleep(1500);
+      // Jackpot path manages its own credit add + celebration, then closes
+      // the wheel modal and calls onComplete() with no args. processSpinResult
+      // sees an undefined outcome and skips routing through Win/Cash.
       await resolveJackpotWheel(onComplete);
       return;
   }
@@ -1126,14 +1302,10 @@ async function resolveWheelResult(segment, onComplete) {
   saveState();
 
   await sleep(1500);
-  var closeBtn = document.createElement('button');
-  closeBtn.className = 'modal-close';
-  closeBtn.textContent = 'CONTINUE';
-  closeBtn.addEventListener('click', function() {
-    $id('modal').classList.add('hidden');
-    onComplete();
-  });
-  $id('modalContent').appendChild(closeBtn);
+  // Reveal the pre-allocated CONTINUE button — its click handler is already
+  // wired in openWheel(), so flipping visibility is enough.
+  var closeBtn = $id('wheelCloseBtn');
+  if (closeBtn) closeBtn.style.visibility = 'visible';
 }
 
 async function resolveJackpotWheel(onComplete) {
@@ -1287,7 +1459,8 @@ function openPaytable() {
   h2.textContent = 'PAYTABLE';
   contentEl.appendChild(h2);
 
-  var order = ['captain','skull','chest','swords','hat','ship','parrot','cannon','rum','anchor','compass','wild','scatter','bonus'];
+  // Specials at the top (wild, scatter, bonus), then regular symbols high → low.
+  var order = ['wild','scatter','bonus','captain','skull','chest','swords','hat','ship','parrot','cannon','rum','anchor','compass'];
   for (var oi = 0; oi < order.length; oi++) {
     var id = order[oi];
     var sym = SYMBOLS[id];
@@ -1313,9 +1486,15 @@ function openPaytable() {
     var paysDiv = document.createElement('div');
     paysDiv.className = 'paytable-pays';
     if (sym.isWild) {
-      var s = document.createElement('span');
-      s.textContent = 'WILD - Substitutes for all';
-      paysDiv.appendChild(s);
+      var sw = document.createElement('span');
+      sw.textContent = 'WILD - Subs for all';
+      paysDiv.appendChild(sw);
+      for (var pw = 1; pw < 5; pw++) {
+        if (!sym.pay[pw]) continue;
+        var swp = document.createElement('span');
+        swp.textContent = (pw + 1) + '×: ' + sym.pay[pw] + '×';
+        paysDiv.appendChild(swp);
+      }
     } else if (id === 'scatter') {
       var s2 = document.createElement('span');
       s2.textContent = '3\u21928 / 4\u219212 / 5\u219215 Free Spins';
@@ -1325,7 +1504,10 @@ function openPaytable() {
       s3.textContent = '3 on reels 1,3,5 \u2192 Wheel';
       paysDiv.appendChild(s3);
     } else {
-      for (var pi = 2; pi < 5; pi++) {
+      // Loop from pay[1] (2-of-a-kind) through pay[4] (5-of-a-kind);
+      // skip tiers that don't pay so the row stays clean.
+      for (var pi = 1; pi < 5; pi++) {
+        if (!sym.pay[pi]) continue;
         var s4 = document.createElement('span');
         s4.textContent = (pi + 1) + '\u00d7: ' + sym.pay[pi] + '\u00d7';
         paysDiv.appendChild(s4);
@@ -1341,10 +1523,10 @@ function openPaytable() {
   contentEl.appendChild(h2b);
 
   var features = [
-    ['Cascading Wins:', 'Winning symbols explode, new ones drop. Multiplier: \u00d71\u2192\u00d72\u2192\u00d73\u2192\u00d75\u2192\u00d78', 'var(--gold)'],
     ['Free Spins:', '3+ Scatter = 8-15 free spins with \u00d72 multiplier. Can retrigger.', '#c084fc'],
     ['Treasure Hunt:', 'Captain on reels 1 & 5 \u2192 pick chests for prizes!', 'var(--red)'],
     ['Wheel of Fortune:', '3 Ship Wheels on reels 1, 3, 5 \u2192 spin the wheel!', 'var(--red)'],
+    ['Mystery Reel:', '4-of-a-kind on reels 1-4 \u2192 reel 5 swaps to a boosted strip with extra wilds.', 'var(--gold)'],
     ['Jackpots:', 'Mini, Major, Grand \u2014 triggered randomly or via bonuses.', 'var(--gold)'],
   ];
   var featWrap = document.createElement('div');
@@ -1540,9 +1722,176 @@ function highlightLineStripes(wins) {
     var idx = wins[i].lineIndex;
     if (seen[idx]) continue;
     seen[idx] = true;
-    var stripe = document.querySelector('.line-stripe[data-line-idx="' + idx + '"]');
-    if (stripe) stripe.classList.add('active');
+    lightUpStripe(idx);
   }
+}
+
+function lightUpStripe(lineIdx) {
+  var stripe = document.querySelector('.line-stripe[data-line-idx="' + lineIdx + '"]');
+  if (stripe) stripe.classList.add('active');
+}
+
+function setWinHighlight(positions) {
+  var current = document.querySelectorAll('.symbol-cell.win-highlight');
+  for (var i = 0; i < current.length; i++) current[i].classList.remove('win-highlight');
+  if (!positions) return;
+  for (var p = 0; p < positions.length; p++) {
+    var cell = document.querySelector('.symbol-cell[data-reel="' + positions[p].reel + '"][data-row="' + positions[p].row + '"]');
+    if (cell) cell.classList.add('win-highlight');
+  }
+}
+
+// Glow on bonus-trigger symbols (ship wheels). Distinct from win-highlight so
+// it's clear what TRIGGERED the wheel, vs what PAID on a payline.
+function setTriggerGlow(positions) {
+  clearTriggerGlow();
+  if (!positions) return;
+  for (var p = 0; p < positions.length; p++) {
+    var cell = document.querySelector('.symbol-cell[data-reel="' + positions[p].reel + '"][data-row="' + positions[p].row + '"]');
+    if (cell) cell.classList.add('bonus-trigger-glow');
+  }
+}
+
+function clearTriggerGlow() {
+  var current = document.querySelectorAll('.symbol-cell.bonus-trigger-glow');
+  for (var i = 0; i < current.length; i++) current[i].classList.remove('bonus-trigger-glow');
+}
+
+function showWinLineCallout(text) {
+  var el = $id('winLineCallout');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('visible');
+}
+
+function hideWinLineCallout() {
+  var el = $id('winLineCallout');
+  if (el) el.classList.remove('visible');
+}
+
+// Looping showcase used in phase 3: cycles through each winning line, then
+// shows ALL lines together, then pauses, then repeats. Each transition fades
+// the callout out for ~100ms before swapping in the new state, then fades it
+// back in (CSS transition on .win-line-callout opacity handles the visual).
+// Runs until cancelWinShowcase() is called from the next spin's pre-cleanup.
+var winShowcaseTimer = null;
+var winShowcaseFadeTimer = null;
+var SHOWCASE_FADE_MS  = 150;   // out-then-in transition before each step
+var SHOWCASE_LINE_MS  = 1500;   // dwell per individual line (~1050ms incl fade)
+var SHOWCASE_ALL_MS   = 3000;  // dwell for the all-lines summary
+var SHOWCASE_BLANK_MS = 675;   // blank pause between cycles
+
+function startWinShowcase(winData) {
+  cancelWinShowcase();
+  if (!winData || winData.length === 0) return;
+
+  // Pre-compute the all-lines bundle once. Bonus entries (wheel / TH) don't
+  // contribute payline cells or stripes — only their amount adds to total.
+  var totalWin = 0;
+  var allHl = [];
+  var allWins = [];
+  for (var i = 0; i < winData.length; i++) {
+    totalWin += winData[i].amount;
+    if (winData[i].bonus) continue;
+    allWins.push(winData[i].win);
+    for (var pi = 0; pi < winData[i].win.count; pi++) {
+      allHl.push(winData[i].win.positions[pi]);
+    }
+  }
+
+  // Build the step sequence for one cycle. Each step has an apply() function
+  // and a dwell time. The cycle loops indefinitely until cancelled.
+  var steps = [];
+  for (var li = 0; li < winData.length; li++) {
+    (function(item) {
+      steps.push({
+        dwell: SHOWCASE_LINE_MS,
+        apply: function() {
+          if (item.bonus) {
+            setWinHighlight(null);
+            clearPaylineOverlay();
+            showWinLineCallout(item.label + ': ' + formatNum(Math.floor(item.amount)) + ' credits');
+          } else {
+            var lineHl = item.win.positions.slice(0, item.win.count);
+            setWinHighlight(lineHl);
+            drawPaylines([item.win]);
+            var label = item.win.count + ' ' +
+                        displaySymbolName(item.win.symbol, item.win.count) + ', ' +
+                        formatNum(Math.floor(item.amount)) + ' credits';
+            showWinLineCallout(label);
+          }
+        }
+      });
+    })(winData[li]);
+  }
+  // All-lines summary
+  steps.push({
+    dwell: SHOWCASE_ALL_MS,
+    apply: function() {
+      setWinHighlight(allHl);
+      drawPaylines(allWins);
+      showWinLineCallout('Total: ' + formatNum(Math.floor(totalWin)) + ' credits');
+    }
+  });
+  // Blank pause between cycles (everything cleared)
+  steps.push({
+    dwell: SHOWCASE_BLANK_MS,
+    apply: function() {
+      hideWinLineCallout();
+      setWinHighlight(null);
+      clearPaylineOverlay();
+    }
+  });
+
+  var idx = 0;
+  function nextStep() {
+    var step = steps[idx % steps.length];
+    // Fade out the callout, then apply the new state (which kicks off fade-in).
+    hideWinLineCallout();
+    winShowcaseFadeTimer = setTimeout(function() {
+      step.apply();
+      winShowcaseTimer = setTimeout(function() {
+        idx++;
+        nextStep();
+      }, step.dwell);
+    }, SHOWCASE_FADE_MS);
+  }
+  nextStep();
+}
+
+function cancelWinShowcase() {
+  if (winShowcaseTimer) clearTimeout(winShowcaseTimer);
+  if (winShowcaseFadeTimer) clearTimeout(winShowcaseFadeTimer);
+  winShowcaseTimer = null;
+  winShowcaseFadeTimer = null;
+  hideWinLineCallout();
+  setWinHighlight(null);
+}
+
+// Pluralize a symbol name for the callout — strip parentheticals like "(Wild)"
+// and append 's' when count !== 1, unless the name already ends in 's'.
+function displaySymbolName(symId, count) {
+  var name = SYMBOLS[symId].name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  if (count === 1) return name;
+  if (/s$/i.test(name)) return name;
+  return name + 's';
+}
+
+// Animate an LED display from `from` to `to` over `durationMs`, formatting
+// each tick with `formatter`. Fire-and-forget — does not return a Promise.
+function tickUp(elId, from, to, durationMs, formatter) {
+  var el = $id(elId);
+  if (!el) return;
+  var start = performance.now();
+  var delta = to - from;
+  function step(now) {
+    var t = Math.min((now - start) / durationMs, 1);
+    var eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    var current = from + delta * eased;
+    el.textContent = formatter(current);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 function clearLineStripes() {
@@ -1574,24 +1923,31 @@ function init() {
     saveState();
   });
 
-  // Bill inserter
-  $id('billSlot').addEventListener('click', function() {
+  // Bill inserter — the spin-row Insert button is the only entry point now.
+  var insertBtn = document.getElementById('insertBtn');
+  if (insertBtn) insertBtn.addEventListener('click', function() {
     insertBill();
   });
+  // Cash out button — UI placeholder; no behaviour yet.
+  var cashoutBtn = document.getElementById('cashoutBtn');
+  if (cashoutBtn) cashoutBtn.addEventListener('click', function() {
+    /* TODO: cash-out flow */
+  });
 
-  // Footer tabs
-  var footerTabs = document.querySelectorAll('.footer-tab');
-  for (var ti = 0; ti < footerTabs.length; ti++) {
+  // Tabs (Paytable / Stats / Settings) — selector matches the new spin-row
+  // buttons that carry a data-tab attribute.
+  var tabBtns = document.querySelectorAll('[data-tab]');
+  for (var ti = 0; ti < tabBtns.length; ti++) {
     (function(tab) {
       tab.addEventListener('click', function() {
-        for (var j = 0; j < footerTabs.length; j++) footerTabs[j].classList.remove('active');
+        for (var j = 0; j < tabBtns.length; j++) tabBtns[j].classList.remove('active');
         tab.classList.add('active');
         var tabName = tab.dataset.tab;
         if (tabName === 'paytable') openPaytable();
         else if (tabName === 'stats') openStats();
         else if (tabName === 'settings') openSettings();
       });
-    })(footerTabs[ti]);
+    })(tabBtns[ti]);
   }
 
   // Keyboard
@@ -1602,23 +1958,21 @@ function init() {
     }
   });
 
-  // Loyalty card insert animation on first visit
-  if (!state.loyalty.cardInserted) {
-    showCardInsert();
-  } else {
-    $id('cardOverlay').classList.add('hidden');
-  }
+  // Loyalty card overlay is opt-in — never blocks game startup. Clicking the
+  // overlay anywhere skips ahead; clicking the badge in the win panel plays
+  // the insert animation.
+  $id('cardOverlay').classList.add('hidden');
+  state.loyalty.cardInserted = true;
+  saveState();
 
-  // Click anywhere on the card overlay to skip ahead through the animation
   $id('cardOverlay').addEventListener('click', function() {
     cardInsertSkip = true;
   });
 
-  // Click the loyalty badge in the win panel to re-trigger the card insert
   var badge = $id('loyaltyBadge');
   if (badge) {
     badge.style.cursor = 'pointer';
-    badge.title = 'Tap to re-insert your loyalty card';
+    badge.title = 'Tap to play the loyalty-card insert animation';
     badge.addEventListener('click', function() {
       showCardInsert();
     });
@@ -1636,12 +1990,10 @@ function init() {
     openTreasureHunt(function() { updateUI(); saveState(); });
   });
   wireDebug('dbgWheel', function() {
+    // The user clicks "SPIN THE WHEEL" inside the modal to trigger the spin —
+    // no auto-trigger here, otherwise the wheel feels like it's spinning on
+    // its own with no input.
     openWheel(function() { updateUI(); saveState(); });
-    // Auto-trigger the spin so debug doesn't require a second click
-    setTimeout(function() {
-      var btn = document.getElementById('wheelSpinBtn');
-      if (btn && !btn.disabled) btn.click();
-    }, 600);
   });
   wireDebug('dbgJackpotMini', function() {
     showJackpotWin('mini');

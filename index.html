@@ -30,12 +30,12 @@
   //   - Wide (>=900px): progressives → RIGHT cabinet TOP, win panel → LEFT cabinet BOTTOM
   //   - Narrow (<900px): both panels return to top of .game-wrap (progressives, then win)
   document.addEventListener('DOMContentLoaded', () => {
-    const progressives = document.getElementById('progressivesPanel');
-    const winPanel     = document.getElementById('winPanel');
-    const gameWrap     = document.querySelector('.game-wrap');
-    const leftSlot     = document.getElementById('cabinetSlotLeft');
-    const rightSlot    = document.getElementById('cabinetSlotRight');
-    if (!progressives || !winPanel || !gameWrap || !leftSlot || !rightSlot) return;
+    const progressives  = document.getElementById('progressivesPanel');
+    const winPanel      = document.getElementById('winPanel');
+    const cabinetContent = document.querySelector('.cabinet-content');
+    const leftSlot      = document.getElementById('cabinetSlotLeft');
+    const rightSlot     = document.getElementById('cabinetSlotRight');
+    if (!progressives || !winPanel || !cabinetContent || !leftSlot || !rightSlot) return;
 
     const mq = window.matchMedia('(min-width: 900px)');
     function relocate(){
@@ -43,9 +43,9 @@
         leftSlot.appendChild(winPanel);
         rightSlot.appendChild(progressives);
       } else {
-        // Restore to top of .game-wrap, in mobile DOM order: progressives first, then win
-        gameWrap.prepend(winPanel);
-        gameWrap.prepend(progressives);
+        // Restore to top of .cabinet-content, in mobile DOM order: progressives first, then win
+        cabinetContent.prepend(winPanel);
+        cabinetContent.prepend(progressives);
       }
     }
     relocate();
@@ -100,14 +100,75 @@ body{
   .header h1{font-size:28px;letter-spacing:4px}
 }
 
-/* Main container */
+/* Main container — center column inside the cabinet-frame grid. The wooden
+   cabinet (.cabinet-content) sits at the top; the cabinet sides on wider
+   screens stretch to match this column's height, so making the cabinet end
+   at the SPIN button (i.e. NOT putting more stuff after it) is what aligns
+   the side-panel bottoms with the SPIN button. Bill / footer / debug live
+   OUTSIDE this — in .below-cabinet, sibling of .cabinet-frame. */
 .game-wrap{
-  width:100%;max-width:600px;padding:72px 8px 8px;
-  display:flex;flex-direction:column;align-items:center;gap:8px;
+  width:100%;max-width:660px;padding:72px 8px 0;
+  display:flex;flex-direction:column;align-items:center;gap:0;
   z-index:1;
 }
 @media(max-width:560px){
   .game-wrap{padding-top:56px}
+}
+
+/* Wooden ship-cabinet frame — wraps the play area (progressives → SPIN). */
+.cabinet-content{
+  position:relative;
+  width:100%;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:26px 22px;
+  border:6px solid #2a1608;
+  border-radius:12px;
+  /* Wood-grain background: layered repeating gradients + radial wood tint */
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(0,0,0,.10) 0,rgba(0,0,0,.10) 1px,
+      transparent 1px,transparent 7px),
+    repeating-linear-gradient(90deg,
+      rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 1px,
+      transparent 1px,transparent 23px),
+    radial-gradient(ellipse at 50% 30%, #6b3f1c 0%, #4a2914 60%, #2c1709 100%);
+  box-shadow:
+    inset 0 0 28px rgba(0,0,0,.7),
+    inset 0 0 0 2px rgba(212,164,74,.55),
+    0 6px 22px rgba(0,0,0,.55);
+}
+/* Four brass rivets in a single pseudo-element via four layered radial
+   gradients (one per corner). The off-center gradient origin gives each
+   rivet a highlight on the upper-left quadrant. */
+.cabinet-content::before{
+  content:'';
+  position:absolute;inset:0;
+  pointer-events:none;
+  z-index:5;
+  background:
+    /* top-left */
+    radial-gradient(circle 7px at 11px 11px,
+      #fff5d0 0%, #e8c97a 32%, #a87420 70%, #3a2008 92%, transparent 95%) no-repeat,
+    /* top-right */
+    radial-gradient(circle 7px at calc(100% - 11px) 11px,
+      #fff5d0 0%, #e8c97a 32%, #a87420 70%, #3a2008 92%, transparent 95%) no-repeat,
+    /* bottom-left */
+    radial-gradient(circle 7px at 11px calc(100% - 11px),
+      #fff5d0 0%, #e8c97a 32%, #a87420 70%, #3a2008 92%, transparent 95%) no-repeat,
+    /* bottom-right */
+    radial-gradient(circle 7px at calc(100% - 11px) calc(100% - 11px),
+      #fff5d0 0%, #e8c97a 32%, #a87420 70%, #3a2008 92%, transparent 95%) no-repeat;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));
+}
+
+/* Below-cabinet zone: bill inserter, footer tabs, debug panel — sits under
+   the cabinet, centered to the same width as the cabinet column. */
+.below-cabinet{
+  width:100%;max-width:600px;
+  margin:8px auto 0;
+  padding:0 8px 12px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  z-index:1;
 }
 
 /* === Atmospheric backdrop (shading + faded mural silhouette) === */
@@ -153,7 +214,9 @@ body::after{
   display:none; /* shown via media query on wider screens */
   flex-direction:column;
   align-items:center;
-  padding:72px 4% 12px;
+  /* padding-bottom matches .cabinet-content's padding-bottom (26px) so the
+     loyalty card / coin pile bottom aligns with the SPIN button bottom. */
+  padding:72px 4% 26px;
   gap:12px;
 }
 .cabinet-side-content{
@@ -260,6 +323,19 @@ body::after{
   width:100%;max-width:340px;
   display:flex;flex-direction:column;gap:5px;
 }
+.win-line-callout{
+  /* Per-line tally text shown above the WIN box during the showcase phase */
+  text-align:center;
+  font-size:11px;font-weight:bold;
+  color:var(--gold-bright);
+  letter-spacing:1px;
+  text-shadow:0 0 6px rgba(255,215,0,.55);
+  height:16px;line-height:16px;
+  opacity:0;
+  transition:opacity .15s ease;
+}
+.win-line-callout.visible{opacity:1}
+
 .win-led-box{
   background:#0a0a12;
   border:2px solid #2a2a3a;
@@ -281,7 +357,7 @@ body::after{
 .win-led-value.win-flash{
   animation:winFlash 0.8s ease infinite alternate;
 }
-.win-row{display:flex;gap:5px}
+.win-row{display:flex;gap:5px;align-items:stretch}
 .win-row-box{
   flex:1;min-width:0;
   background:#0a0a12;
@@ -290,15 +366,18 @@ body::after{
   padding:5px 6px;text-align:center;
   box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
 }
+/* Field width allotment:
+     Cash → wide enough for "$99,999.99" (10 chars in Courier at 16px)
+     Bet  → narrow (max value is 500, only 3 chars)
+     Denom → fixed-square clickable button */
+.win-row-cash{flex:5}
+.win-row-bet{flex:2}
 .win-row-box.clickable{
   cursor:pointer;
-  transition:border-color .15s,background .15s;
+  transition:filter .15s,background .15s,transform .1s;
 }
-.win-row-box.clickable:hover{
-  border-color:var(--gold);
-  background:#15151f;
-}
-.win-row-box.clickable:active{transform:scale(0.98)}
+.win-row-box.clickable:hover{filter:brightness(1.2)}
+.win-row-box.clickable:active{transform:translateY(1px)}
 .win-row-label{
   display:block;font-size:8px;text-transform:uppercase;
   letter-spacing:1.5px;color:var(--text-muted);margin-bottom:2px;
@@ -313,6 +392,39 @@ body::after{
 #cashDisplay,#denomDisplay{
   color:var(--gold);
   text-shadow:0 0 6px rgba(255,211,92,.4);
+}
+
+/* Denom button — fixed square, lighter raised look so it reads as clickable.
+   Its caption ("Change") sits below the denom value to make the action obvious. */
+.denom-btn{
+  flex:0 0 56px;
+  aspect-ratio:1;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;
+  background:linear-gradient(180deg,#2c2c44 0%,#181822 100%);
+  border-color:#5a5a72;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    inset 0 -3px 5px rgba(0,0,0,.45),
+    0 2px 4px rgba(0,0,0,.55);
+}
+.denom-btn:hover{
+  background:linear-gradient(180deg,#3a3a55 0%,#22222e 100%);
+}
+.denom-btn:active{
+  background:linear-gradient(180deg,#181822 0%,#2c2c44 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,.55),
+    0 0 0 rgba(0,0,0,0);
+}
+.denom-btn .win-row-value{
+  font-size:14px;
+}
+.denom-change{
+  display:block;font-size:8px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--gold);
+  margin-top:1px;line-height:1;
+  opacity:.85;
 }
 .loyalty-card-mini{
   display:flex;align-items:center;gap:6px;font-size:11px;
@@ -371,14 +483,17 @@ body::after{
   to{opacity:1;transform:scaleX(1.15)}
 }
 
-/* Row beneath the reels: "20 LINES" label sits under the line-indicator,
-   SPIN button stretches across to match the reel-frame's width. */
+/* Row beneath the reels: "20 LINES" label, then the controls cluster
+   (INSERT $100 | SPIN circle | CASH OUT). The SPIN button is a large
+   circle taking ~half the controls width; Insert and Cash Out are smaller
+   side buttons that share the remaining space. */
 .below-reels-row{
   width:100%;
-  display:flex;align-items:stretch;gap:6px;
+  display:flex;align-items:center;gap:8px;
 }
 .line-indicator-label{
   flex:0 0 28px;
+  align-self:flex-start;
   text-align:center;
   font-family:'Impact','Arial Black',sans-serif;
   font-size:10px;line-height:1.05;
@@ -389,7 +504,26 @@ body::after{
 .line-indicator-label span{
   display:block;font-size:14px;color:var(--gold-bright);
 }
-.below-reels-row .controls{flex:1;width:auto}
+.below-reels-row .controls{
+  flex:1;
+  display:flex;align-items:stretch;justify-content:center;
+  gap:10px;
+}
+/* The controls cluster has TWO COLUMNS at this level:
+   1. .controls-stack (flex:1)  — two stacked rows of small buttons
+      Row 1: [INSERT $][CASH OUT □]    (Cash Out is a square)
+      Row 2: [Paytable][Stats][Settings]
+   2. .btn-spin (auto width)    — large circle, double-height (matches stack) */
+.controls-stack{
+  flex:1;
+  display:flex;flex-direction:column;gap:6px;
+  min-width:0;
+}
+.controls-row{
+  flex:1 1 0;
+  display:flex;gap:6px;align-items:stretch;
+  min-height:0;
+}
 @media(max-width:380px){
   .line-indicator,.line-indicator-label{flex:0 0 20px}
   .line-indicator-label{font-size:8px}
@@ -476,7 +610,7 @@ body::after{
   }
 }
 
-/* SCATTER (treasure map) — dark leather + pulsing warm halo + parchment icon */
+/* SCATTER (treasure map) — leather bg + FREE / SPIN watermark labels + map icon */
 .symbol-cell.sym-scatter{
   background:
     repeating-linear-gradient(0deg,
@@ -485,31 +619,64 @@ body::after{
     repeating-linear-gradient(90deg,
       rgba(0,0,0,.08) 0,rgba(0,0,0,.08) 1px,
       transparent 1px,transparent 11px),
+    radial-gradient(ellipse at 50% 50%, rgba(255,220,140,.18) 0%, transparent 55%),
     radial-gradient(ellipse at 35% 30%, #5c3a1a 0%, #3d2410 60%, #1f1208 100%) !important;
   box-shadow:inset 0 0 16px rgba(0,0,0,.6);
 }
-.symbol-cell.sym-scatter::after{
-  content:'';position:absolute;
-  top:50%;left:50%;
-  width:90%;height:90%;
-  transform:translate(-50%,-50%);
-  background:radial-gradient(circle at center,
-    rgba(255,240,180,.95) 0%,
-    rgba(255,220,140,.6) 20%,
-    rgba(245,200,120,.25) 45%,
-    transparent 70%);
-  animation:scatterHaloPulse 2s ease-in-out infinite alternate;
+/* Override the universal vignette ::before with the "FREE" watermark.
+   Stretched horizontally to nearly the cell width and faded so the map icon
+   reads as foreground. */
+.symbol-cell.sym-scatter::before{
+  content:'FREE';
+  background:none;
+  position:absolute;
+  top:2%;left:0;right:0;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:1.6em;
+  letter-spacing:-0.02em;
+  color:rgba(255,200,0,.18);
+  text-shadow:0 0 6px rgba(255,180,0,.18);
+  transform:scale(1.65,1.25);
+  transform-origin:top center;
+  line-height:1;
   pointer-events:none;
   z-index:0;
-  border-radius:50%;
 }
-@keyframes scatterHaloPulse{
-  from{opacity:.35;transform:translate(-50%,-50%) scale(.7)}
-  to{opacity:1;transform:translate(-50%,-50%) scale(1.25)}
+.symbol-cell.sym-scatter::after{
+  content:'SPIN';
+  position:absolute;
+  bottom:2%;left:0;right:0;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:1.6em;
+  letter-spacing:-0.02em;
+  color:rgba(255,200,0,.18);
+  text-shadow:0 0 6px rgba(255,180,0,.18);
+  transform:scale(1.65,1.25);
+  transform-origin:bottom center;
+  line-height:1;
+  pointer-events:none;
+  z-index:0;
+  /* clear any inherited circle/animation styles */
+  background:none;
+  width:auto;height:auto;
+  border-radius:0;
+  animation:none;
 }
 .symbol-cell.sym-scatter .sym-icon{
+  width:50% !important;height:50% !important;
   background:radial-gradient(circle,#f5e3b5,#d4b683 70%,#b89260) !important;
+  filter:drop-shadow(0 0 10px rgba(255,200,140,.6))
+         drop-shadow(0 0 22px rgba(255,180,80,.4));
+  animation:scatterIconPulse 2.2s ease-in-out infinite alternate;
   z-index:1;
+}
+@keyframes scatterIconPulse{
+  from{filter:drop-shadow(0 0 8px rgba(255,200,140,.4)) drop-shadow(0 0 16px rgba(255,180,80,.3))}
+  to  {filter:drop-shadow(0 0 18px rgba(255,200,140,.85)) drop-shadow(0 0 32px rgba(255,180,80,.65))}
 }
 
 /* CHEST — bright gold bg + dark brown icon */
@@ -555,10 +722,10 @@ body::after{
   box-shadow:inset 0 0 12px rgba(0,0,0,.5);
   flex-direction:column;
   justify-content:flex-start;
-  padding-top:6%;
+  padding-top:4%;
 }
 .symbol-cell.sym-bonus .sym-icon{
-  width:48% !important;height:48% !important;
+  width:64% !important;height:64% !important;
   background:radial-gradient(circle,#fff8dc,#daa520) !important;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
   animation:bonusWheelSpin 7s ease-in-out infinite;
@@ -568,17 +735,18 @@ body::after{
 .symbol-cell.sym-bonus::after{
   content:'BONUS';
   position:absolute;
-  left:6%;right:6%;bottom:6%;
+  left:4%;right:4%;bottom:4%;
   text-align:center;
   font-family:'Impact','Arial Black',sans-serif;
   font-weight:900;
-  font-size:0.85em;
-  letter-spacing:0.06em;
+  font-size:1.25em;
+  letter-spacing:0.04em;
   color:#daa520;
   -webkit-text-stroke:1.5px #000;
   paint-order:stroke fill;
   text-shadow:0 1px 2px rgba(0,0,0,.6);
-  transform:scaleX(1.15);
+  transform:scaleX(1.2);
+  line-height:1;
   pointer-events:none;
   z-index:2;
 }
@@ -597,6 +765,15 @@ body::after{
 @keyframes winPulse{
   from{box-shadow:inset 0 0 8px rgba(255,215,0,.5),0 0 12px rgba(255,215,0,.3)}
   to{box-shadow:inset 0 0 16px rgba(255,215,0,.8),0 0 24px rgba(255,215,0,.6)}
+}
+/* Bonus-trigger glow (ship wheels that triggered the wheel-of-fortune) */
+.symbol-cell.bonus-trigger-glow{
+  animation:bonusGlow 0.5s ease infinite alternate;
+  z-index:3;
+}
+@keyframes bonusGlow{
+  from{box-shadow:inset 0 0 10px rgba(77,208,225,.6),0 0 16px rgba(77,208,225,.5)}
+  to  {box-shadow:inset 0 0 22px rgba(77,208,225,.95),0 0 36px rgba(77,208,225,.85)}
 }
 /* Payline overlay */
 .payline-overlay{
@@ -625,45 +802,139 @@ body::after{
   display:flex;align-items:center;gap:8px;width:100%;
   padding:4px 0;
 }
+/* SPIN button — large brass-rimmed CIRCLE in the middle of the controls
+   cluster. Diameter scales with viewport but caps at 130px on wide screens. */
 .btn-spin{
-  flex:1;height:44px;border:none;border-radius:var(--radius);
-  background:linear-gradient(135deg,#39ff14,#22cc00);color:#000;
-  font-family:inherit;font-size:16px;font-weight:bold;
-  cursor:pointer;letter-spacing:2px;
+  flex:0 0 auto;
+  width:clamp(96px, 30vw, 130px);
+  aspect-ratio:1;
+  border:3px solid #2a1608;
+  border-radius:50%;
+  background:
+    radial-gradient(circle at 35% 30%,#7eff5a 0%,#39ff14 35%,#22cc00 75%,#0e8400 100%);
+  color:#0a2400;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:24px;font-weight:900;letter-spacing:2px;
+  cursor:pointer;
+  box-shadow:
+    inset 0 -4px 8px rgba(0,0,0,.4),
+    inset 0 3px 6px rgba(255,255,255,.4),
+    inset 0 0 0 2px rgba(212,164,74,.7),
+    0 4px 10px rgba(0,0,0,.5);
   transition:all .15s;
+  display:flex;align-items:center;justify-content:center;
+  text-shadow:0 1px 1px rgba(255,255,255,.3);
+  line-height:1;
 }
-.btn-spin:hover{filter:brightness(1.2);transform:scale(1.02)}
-.btn-spin:active{transform:scale(0.98)}
+.btn-spin:hover{filter:brightness(1.15);transform:scale(1.03)}
+.btn-spin:active{transform:scale(0.96)}
 .btn-spin:disabled{
-  background:var(--bg-card);color:var(--text-muted);
+  background:radial-gradient(circle at 35% 30%,#3a3a4a,#1a1a25);
+  color:var(--text-muted);
   cursor:not-allowed;filter:none;transform:none;
 }
 .btn-spin.free-spin-btn{
-  background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;
+  background:radial-gradient(circle at 35% 30%,#d4a3ff 0%,#a855f7 35%,#7c3aed 75%,#4c1d95 100%);
+  color:#fff;
+  font-size:13px;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
 }
 
-/* Free spins counter */
+/* Side buttons — common brass-trimmed look used by Insert, Cash Out, and the
+   Paytable / Stats / Settings tabs. Each variant overrides background + size. */
+.btn-side{
+  flex:1 1 0;
+  height:100%;
+  min-height:0;
+  border:2px solid #2a1608;
+  border-radius:8px;
+  cursor:pointer;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:13px;font-weight:900;letter-spacing:1px;
+  line-height:1.05;
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;
+  position:relative;
+  box-shadow:
+    inset 0 -2px 4px rgba(0,0,0,.35),
+    inset 0 2px 3px rgba(255,255,255,.3),
+    inset 0 0 0 2px rgba(212,164,74,.5),
+    0 2px 6px rgba(0,0,0,.45);
+  transition:all .15s;
+  padding:4px 6px;
+}
+.btn-side:hover{filter:brightness(1.15);transform:scale(1.03)}
+.btn-side:active{transform:scale(0.96)}
+
+/* Insert $ — green, with a horizontal bill-slot slit at the top so it reads
+   as a "cash inserter" instead of a generic button. */
+.btn-insert{
+  background:radial-gradient(circle at 35% 25%,#a8d68a,#5a8a42 70%,#2f5520);
+  color:#0a1a04;
+  text-shadow:0 1px 1px rgba(255,255,255,.25);
+  flex-direction:column;
+  gap:4px;
+  padding-top:8px;
+}
+.btn-insert .bill-slot-glyph{
+  display:block;
+  width:60%;height:4px;
+  background:#1a0a02;
+  border-radius:0 0 4px 4px;
+  box-shadow:
+    inset 0 1px 2px rgba(0,0,0,.95),
+    inset 0 -1px 0 rgba(255,255,255,.18),
+    0 1px 0 rgba(255,255,255,.25);
+}
+.btn-insert .btn-side-label{
+  display:block;font-size:13px;line-height:1;
+}
+/* Brief "money going in" pulse triggered when insertBill() runs */
+.btn-insert.inserting{
+  animation:insertPulse .65s ease;
+}
+@keyframes insertPulse{
+  0%   {filter:brightness(1)}
+  35%  {filter:brightness(1.5) drop-shadow(0 0 12px rgba(57,255,20,.8))}
+  70%  {filter:brightness(1.3) drop-shadow(0 0 8px rgba(57,255,20,.5))}
+  100% {filter:brightness(1)}
+}
+
+/* Cash Out — gold, SQUARE (aspect-ratio 1, height 100% of row). */
+.btn-cashout{
+  background:radial-gradient(circle at 35% 25%,#ffd35c,#daa520 70%,#7a5a0a);
+  color:#1a0c00;
+  text-shadow:0 1px 1px rgba(255,255,255,.25);
+  flex:0 0 auto;
+  aspect-ratio:1;
+  width:auto;
+  padding:4px;
+}
+.btn-cashout:disabled{cursor:not-allowed;opacity:.6}
+
+/* Paytable / Stats / Settings — slate-blue tabs, same brass trim. */
+.btn-tab{
+  background:radial-gradient(circle at 35% 25%,#4a6a8a,#2a4a6a 70%,#162a40);
+  color:#e8f0ff;
+  text-shadow:0 1px 1px rgba(0,0,0,.45);
+  font-size:11px;letter-spacing:0.5px;
+  text-transform:uppercase;
+}
+
+/* Free spins counter — reserves vertical space at all times so the cabinet
+   doesn't reflow when free spins activate. Hidden via visibility (not display)
+   so the slot stays the same height whether the bar is showing or not. */
 .free-spins-bar{
   width:100%;text-align:center;padding:6px;
   background:linear-gradient(135deg,rgba(168,85,247,.2),rgba(124,58,237,.2));
   border:1px solid rgba(168,85,247,.3);border-radius:var(--radius);
-  font-size:13px;color:#c084fc;display:none;
+  font-size:13px;color:#c084fc;
+  visibility:hidden;
 }
-.free-spins-bar.active{display:block}
+.free-spins-bar.active{visibility:visible}
 
-/* Footer tabs */
-.footer-tabs{
-  display:flex;gap:4px;width:100%;
-}
-.footer-tab{
-  flex:1;padding:8px 4px;text-align:center;
-  background:var(--bg-card);border:1px solid var(--border);
-  border-radius:var(--radius);color:var(--text-muted);
-  cursor:pointer;font-family:inherit;font-size:11px;
-  transition:all .15s;
-}
-.footer-tab:hover{background:var(--bg-hover)}
-.footer-tab.active{color:var(--accent);border-color:var(--accent)}
+/* (Old .footer-tabs / .footer-tab styles removed — Paytable / Stats / Settings
+   moved into the spin row as .btn-tab buttons styled with the cabinet brass trim.) */
 
 /* Modal overlay */
 .modal-overlay{
@@ -860,60 +1131,34 @@ body::after{
   to{opacity:.6;text-shadow:0 0 20px rgba(255,211,92,.8),0 0 40px rgba(255,211,92,.3)}
 }
 
-/* Near-win reel anticipation */
+/* Near-win reel anticipation — gold inset glow that pulses bright. The
+   outer box-shadow is clipped by .reel-col's overflow:hidden, so all the
+   visible "tension" comes from the inset shadow + border + a tinted
+   semi-transparent overlay. */
 .reel-col.anticipation .reel-strip{
   transition:transform 1.2s cubic-bezier(.17,.67,.05,1) !important;
 }
 .reel-col.anticipation::after{
   content:'';position:absolute;inset:0;z-index:5;pointer-events:none;
-  border:2px solid var(--gold);border-radius:4px;
-  animation:reelAnticipate 0.4s ease infinite alternate;
+  border:3px solid var(--gold-bright);border-radius:4px;
+  background:radial-gradient(ellipse at center,
+    transparent 50%,rgba(255,215,0,.08) 100%);
+  animation:reelAnticipate 0.45s ease infinite alternate;
 }
 @keyframes reelAnticipate{
-  from{box-shadow:inset 0 0 8px rgba(255,215,0,.2),0 0 8px rgba(255,215,0,.2)}
-  to{box-shadow:inset 0 0 16px rgba(255,215,0,.5),0 0 16px rgba(255,215,0,.5)}
+  from{
+    box-shadow:inset 0 0 14px rgba(255,215,0,.45),inset 0 0 28px rgba(255,180,0,.2);
+    border-color:rgba(255,215,0,.7);
+  }
+  to{
+    box-shadow:inset 0 0 28px rgba(255,235,100,.95),inset 0 0 56px rgba(255,200,0,.5);
+    border-color:rgba(255,255,180,1);
+  }
 }
 
 /* === BILL INSERTER === */
-.bill-inserter{
-  width:100%;position:relative;overflow:hidden;
-}
-.bill-slot{
-  width:100%;height:48px;
-  background:linear-gradient(180deg,#1a1a30,#0d0d1a);
-  border:2px solid #2a2a3a;border-radius:var(--radius);
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  gap:8px;transition:all .2s;position:relative;overflow:hidden;
-}
-.bill-slot:hover{border-color:var(--accent);box-shadow:0 0 12px rgba(57,255,20,.15)}
-.bill-slot-slit{
-  position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:70%;height:4px;background:#333;border-radius:0 0 4px 4px;
-  box-shadow:inset 0 1px 3px rgba(0,0,0,.8);
-}
-.bill-slot-label{
-  font-size:13px;color:var(--accent);font-weight:bold;letter-spacing:1px;
-  z-index:1;
-}
-.bill-slot-icon{font-size:18px;z-index:1}
-.bill-anim{
-  position:absolute;left:50%;bottom:-80px;transform:translateX(-50%);
-  width:60%;height:70px;
-  background:linear-gradient(135deg,#85bb65,#5a8a42);
-  border:2px solid #4a7a32;border-radius:4px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:16px;font-weight:bold;color:#1a3a0a;
-  z-index:2;pointer-events:none;
-}
-.bill-anim.phase-slide{
-  transition:transform 0.6s cubic-bezier(.17,.67,.12,1);
-  transform:translateX(-50%) translateY(-120px);
-}
-.bill-anim.phase-eat{
-  transition:transform 0.5s ease-in;
-  transform:translateX(-50%) translateY(-160px);
-  opacity:0;
-}
+/* (Old .bill-inserter / .bill-slot / .bill-anim styles removed — the standalone
+   bill inserter visual moved into the Insert button on the spin row.) */
 
 /* === LOYALTY CARD INSERT === */
 .card-overlay{
@@ -1013,6 +1258,11 @@ body::after{
   </div>
 
 <div class="game-wrap">
+ <!-- Wooden ship cabinet — wraps the play area (progressives, win panel,
+      free spins bar, reels, SPIN button). Rivets at the four corners and
+      a thick wood-grained border give the slot a "ship cabinet" feel.
+      Bill inserter, footer tabs, and debug panel sit OUTSIDE the cabinet. -->
+ <div class="cabinet-content">
   <!-- Progressives (relocates to right cabinet TOP on >=900px) -->
   <div class="progressives-panel" id="progressivesPanel">
     <div class="progressives-title">PROGRESSIVE</div>
@@ -1032,22 +1282,24 @@ body::after{
 
   <!-- Win / Cash / Bet / Denom + Loyalty (relocates to left cabinet BOTTOM on >=900px) -->
   <div class="win-panel" id="winPanel">
+    <div class="win-line-callout" id="winLineCallout"></div>
     <div class="win-led-box">
       <span class="win-led-label">Win</span>
       <span class="win-led-value" id="winLedDisplay"></span>
     </div>
     <div class="win-row">
-      <div class="win-row-box">
+      <div class="win-row-box win-row-cash">
         <span class="win-row-label">Cash</span>
         <span class="win-row-value" id="cashDisplay">$0.00</span>
       </div>
-      <div class="win-row-box">
+      <div class="win-row-box win-row-bet">
         <span class="win-row-label">Bet</span>
         <span class="win-row-value" id="betCalcDisplay">20</span>
       </div>
-      <div class="win-row-box clickable" id="denomBox" title="Tap to change denomination">
+      <div class="win-row-box clickable denom-btn" id="denomBox" title="Tap to change denomination">
         <span class="win-row-label">Denom</span>
         <span class="win-row-value" id="denomDisplay">1&cent;</span>
+        <span class="denom-change">Change</span>
       </div>
     </div>
     <div class="loyalty-card-mini" id="loyaltyBadge">
@@ -1077,28 +1329,35 @@ body::after{
   <div class="below-reels-row">
     <div class="line-indicator-label"><span id="lineCount">20</span>LINES</div>
     <div class="controls">
+      <div class="controls-stack">
+        <div class="controls-row">
+          <button class="btn-side btn-insert" id="insertBtn" title="Insert money">
+            <span class="bill-slot-glyph"></span>
+            <span class="btn-side-label">INSERT $</span>
+          </button>
+          <button class="btn-side btn-cashout" id="cashoutBtn" title="Cash out">CASH<br>OUT</button>
+        </div>
+        <div class="controls-row">
+          <button class="btn-side btn-tab" data-tab="paytable">Paytable</button>
+          <button class="btn-side btn-tab" data-tab="stats">Stats</button>
+          <button class="btn-side btn-tab" data-tab="settings">Settings</button>
+        </div>
+      </div>
       <button class="btn-spin" id="spinBtn">SPIN</button>
     </div>
   </div>
+ </div>
+</div>
 
-  <!-- Bill inserter -->
-  <div class="bill-inserter" id="billInserter">
-    <div class="bill-slot" id="billSlot">
-      <div class="bill-slot-slit"></div>
-      <span class="bill-slot-icon">💵</span>
-      <span class="bill-slot-label">INSERT $100</span>
-    </div>
-    <div class="bill-anim" id="billAnim">$100</div>
+  <div class="cabinet-side cabinet-side-right">
+    <div class="cabinet-side-content" id="cabinetSlotRight"></div>
+    <div class="cabinet-pile"></div>
   </div>
+</div>
 
-  <!-- Footer tabs -->
-  <div class="footer-tabs">
-    <button class="footer-tab" data-tab="paytable">Paytable</button>
-    <button class="footer-tab" data-tab="stats">Stats</button>
-    <button class="footer-tab" data-tab="settings">Settings</button>
-  </div>
-
-  <!-- Debug panel -->
+<!-- Outside the cabinet/wooden frame: debug panel only. Bill inserter and
+     footer tabs (Paytable/Stats/Settings) moved INTO the spin row as buttons. -->
+<div class="below-cabinet">
   <div class="debug-panel" id="debugPanel">
     <div class="debug-title">DEBUG</div>
     <div class="debug-buttons">
@@ -1115,14 +1374,8 @@ body::after{
   </div>
 </div>
 
-  <div class="cabinet-side cabinet-side-right">
-    <div class="cabinet-side-content" id="cabinetSlotRight"></div>
-    <div class="cabinet-pile"></div>
-  </div>
-</div>
-
-<!-- Loyalty card insert overlay -->
-<div class="card-overlay" id="cardOverlay">
+<!-- Loyalty card insert overlay (hidden by default; shown on badge click) -->
+<div class="card-overlay hidden" id="cardOverlay">
   <div class="card-prompt">Insert Loyalty Card</div>
   <div class="card-reader-slot"></div>
   <div class="loyalty-card" id="loyaltyCard">

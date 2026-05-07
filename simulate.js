@@ -60,6 +60,12 @@ function newStats() {
       wheelJackpotMajor: 0,
       wheelJackpotGrand: 0,
     },
+    // Reel-5 boost stats: boostFired = spins where reels 0-3 had a 4-of-a-kind
+    // (engine swapped reel 4's strip). boostCompleted = of those, how many
+    // resulted in any 5-of-a-kind win on the final grid.
+    boostFired: 0,
+    boostCompleted: 0,
+    fiveOfAKindCount: 0,
     bonusContribution: {
       paylines:     0,
       freeSpins:    0,
@@ -119,6 +125,12 @@ for (var i = 0; i < spins; i++) {
   var spin = Engine.runSpin();
   var paylineWin = spin.paylineWinUnits;
   stats.bonusContribution.paylines += paylineWin;
+
+  if (spin.boost) {
+    stats.boostFired++;
+    if (spin.maxLineCount >= 5) stats.boostCompleted++;
+  }
+  if (spin.maxLineCount >= 5) stats.fiveOfAKindCount++;
 
   var spinWin = paylineWin;
 
@@ -214,6 +226,15 @@ console.log(bar('Wheel of Fortune:',         pct(stats.triggers.bonus,        st
             '   1 in ' + (stats.triggers.bonus ? Math.round(stats.spins / stats.triggers.bonus).toLocaleString() : '∞'));
 console.log(bar('Treasure Hunt:',            pct(stats.triggers.treasureHunt, stats.spins)) +
             '   1 in ' + (stats.triggers.treasureHunt ? Math.round(stats.spins / stats.triggers.treasureHunt).toLocaleString() : '∞'));
+console.log();
+
+console.log('── Reel-5 boost (4-of-a-kind anticipation hit) ─────────────');
+console.log(bar('Boost fired:',     pct(stats.boostFired,     stats.spins)) +
+            '   1 in ' + (stats.boostFired ? Math.round(stats.spins / stats.boostFired).toLocaleString() : '∞'));
+console.log(bar('Boost → 5-of-kind:', pct(stats.boostCompleted, stats.boostFired || 1)) +
+            '   (' + stats.boostCompleted.toLocaleString() + ' / ' + stats.boostFired.toLocaleString() + ' boosted spins)');
+console.log(bar('Total 5-of-a-kind:', pct(stats.fiveOfAKindCount, stats.spins)) +
+            '   1 in ' + (stats.fiveOfAKindCount ? Math.round(stats.spins / stats.fiveOfAKindCount).toLocaleString() : '∞'));
 console.log();
 
 console.log('── Jackpot trigger frequency ───────────────────────────────');

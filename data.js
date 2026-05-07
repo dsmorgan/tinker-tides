@@ -32,22 +32,27 @@ const RARITY_TINTS = {
 };
 
 const SYMBOLS = {
+  // Pay tiers (× betPerLine):
+  //   pay[0] = 1-of-a-kind (always 0)
+  //   pay[1] = 2-of-a-kind (only compass + anchor pay here — drives hit freq)
+  //   pay[2..4] = 3/4/5-of-a-kind
+  // Tuned for ~100% RTP / ~30% hit frequency.
   // Low value (4)
-  compass:        { id: 'compass',        name: 'Compass',           icon: 'compass',              tier: 'low',     pay: [0, 0, 2, 5, 10] },
-  anchor:         { id: 'anchor',         name: 'Anchor',            icon: 'anchor',               tier: 'low',     pay: [0, 0, 2, 5, 10] },
-  rum:            { id: 'rum',            name: 'Rum Bottle',        icon: 'drink-me',             tier: 'low',     pay: [0, 0, 3, 8, 15] },
-  cannon:         { id: 'cannon',         name: 'Cannon',            icon: 'cannon',               tier: 'low',     pay: [0, 0, 3, 8, 15] },
+  compass:        { id: 'compass',        name: 'Compass',           icon: 'compass',              tier: 'low',     pay: [0, 1, 7, 20, 45] },
+  anchor:         { id: 'anchor',         name: 'Anchor',            icon: 'anchor',               tier: 'low',     pay: [0, 1, 7, 20, 45] },
+  rum:            { id: 'rum',            name: 'Rum Bottle',        icon: 'drink-me',             tier: 'low',     pay: [0, 1, 10, 32, 70] },
+  cannon:         { id: 'cannon',         name: 'Cannon',            icon: 'cannon',               tier: 'low',     pay: [0, 1, 10, 32, 70] },
   // Mid value (4)
-  parrot:         { id: 'parrot',         name: 'Parrot',            icon: 'parrot-head',          tier: 'mid',     pay: [0, 0, 5, 15, 30] },
-  ship:           { id: 'ship',           name: 'Ship',              icon: 'pirate-flag',          tier: 'mid',     pay: [0, 0, 5, 15, 30] },
-  hat:            { id: 'hat',            name: 'Pirate Hat',        icon: 'pirate-hat',           tier: 'mid',     pay: [0, 0, 8, 20, 50] },
-  swords:         { id: 'swords',         name: 'Crossed Swords',    icon: 'crossed-swords',       tier: 'mid',     pay: [0, 0, 8, 20, 50] },
+  parrot:         { id: 'parrot',         name: 'Parrot',            icon: 'parrot-head',          tier: 'mid',     pay: [0, 0, 18, 60, 140] },
+  ship:           { id: 'ship',           name: 'Ship',              icon: 'pirate-flag',          tier: 'mid',     pay: [0, 0, 18, 60, 140] },
+  hat:            { id: 'hat',            name: 'Pirate Hat',        icon: 'pirate-hat',           tier: 'mid',     pay: [0, 0, 30, 80, 225] },
+  swords:         { id: 'swords',         name: 'Crossed Swords',    icon: 'crossed-swords',       tier: 'mid',     pay: [0, 0, 30, 80, 225] },
   // High value (3)
-  chest:          { id: 'chest',          name: 'Treasure Chest',    icon: 'open-treasure-chest',  tier: 'high',    pay: [0, 0, 10, 40, 100] },
-  skull:          { id: 'skull',          name: 'Skull & Crossbones',icon: 'skull-crossed-bones',  tier: 'high',    pay: [0, 0, 15, 50, 150] },
-  captain:        { id: 'captain',        name: 'Pirate Captain',    icon: 'pirate-captain',       tier: 'high',    pay: [0, 0, 20, 75, 250] },
+  chest:          { id: 'chest',          name: 'Treasure Chest',    icon: 'open-treasure-chest',  tier: 'high',    pay: [0, 0, 35, 160, 450] },
+  skull:          { id: 'skull',          name: 'Skull & Crossbones',icon: 'skull-crossed-bones',  tier: 'high',    pay: [0, 0, 50, 200, 700] },
+  captain:        { id: 'captain',        name: 'Pirate Captain',    icon: 'pirate-captain',       tier: 'high',    pay: [0, 0, 75, 300, 1200] },
   // Special (3)
-  wild:           { id: 'wild',           name: 'Gold Coin (Wild)',  icon: 'two-coins',            tier: 'wild',    pay: [0, 0, 25, 100, 500], isWild: true },
+  wild:           { id: 'wild',           name: 'Gold Coin (Wild)',  icon: 'two-coins',            tier: 'wild',    pay: [0, 0, 90, 400, 2400], isWild: true },
   scatter:        { id: 'scatter',        name: 'Treasure Map',      icon: 'treasure-map',         tier: 'scatter', pay: [0, 0, 0, 0, 0] },
   bonus:          { id: 'bonus',          name: 'Ship Wheel',        icon: 'ship-wheel',           tier: 'bonus',   pay: [0, 0, 0, 0, 0] },
 };
@@ -89,83 +94,137 @@ const PAYLINES = [
 const BET_LEVELS = [1, 2, 3, 5, 10, 25];
 const NUM_LINES = 20;
 
-// Reel strips: array of symbol IDs per reel
-// Symbol frequency controls actual odds
+// Reel strips: each reel is a fixed circular sequence of symbol IDs.
+//
+// True-reel model: a spin picks one random "stop" position per reel, and the
+// 3 visible cells are read consecutively from that position. So the placement
+// of symbols on the strip — not just their count — matters: rows in a column
+// are now correlated with strip-adjacency.
+//
+// Strips are built procedurally with structured placement:
+//   - Rare symbols (captain, wild, skull, bonus, scatter, chest) get
+//     max-distance greedy placement so they almost never appear adjacent —
+//     keeps multi-row big-pay columns rare.
+//   - Mid-pays (swords, hat, ship, parrot) get moderate spread.
+//   - Low-pays fill the remaining slots in clusters of 2–3, which is what
+//     creates the authentic "lots of compasses but not enough on the line"
+//     near-miss feel of a real cabinet.
+//
+// Counts per reel are preserved from the previous random-pick model; only the
+// ordering changed, so per-symbol odds (count/stripLen) are unchanged.
+function buildReelStrip(counts) {
+  var rareSyms = ['captain', 'wild', 'skull', 'bonus', 'scatter', 'chest'];
+  var midSyms  = ['swords', 'hat', 'ship', 'parrot'];
+  var lowSyms  = ['cannon', 'rum', 'anchor', 'compass'];
+
+  var len = 0;
+  for (var k in counts) len += counts[k];
+  var strip = new Array(len);
+  for (var z = 0; z < len; z++) strip[z] = null;
+
+  function circDist(a, b) {
+    var d = Math.abs(a - b);
+    return Math.min(d, len - d);
+  }
+
+  function placeSpread(syms, considerOthers) {
+    for (var si = 0; si < syms.length; si++) {
+      var sym = syms[si];
+      var c = counts[sym] || 0;
+      var ownPlaced = [];
+      for (var n = 0; n < c; n++) {
+        var bestSlot = -1, bestScore = -2;
+        for (var s = 0; s < len; s++) {
+          if (strip[s] !== null) continue;
+          var minSelf = len, minOther = len;
+          for (var p = 0; p < ownPlaced.length; p++) {
+            var d = circDist(s, ownPlaced[p]);
+            if (d < minSelf) minSelf = d;
+          }
+          if (considerOthers) {
+            for (var ss = 0; ss < len; ss++) {
+              if (strip[ss] === null) continue;
+              var d2 = circDist(s, ss);
+              if (d2 < minOther) minOther = d2;
+            }
+          }
+          // For rare symbols (considerOthers=true): score is min(own-spread,
+          // other-spread) so a slot that's far from same-type but adjacent to
+          // a different rare is rejected. For mids (considerOthers=false):
+          // just spread own type, ignore neighbors.
+          var score = considerOthers ? (Math.min(minSelf, minOther) * 100 + minSelf) : minSelf;
+          if (score > bestScore) { bestScore = score; bestSlot = s; }
+        }
+        if (bestSlot < 0) {
+          for (var f = 0; f < len; f++) if (strip[f] === null) { bestSlot = f; break; }
+        }
+        strip[bestSlot] = sym;
+        ownPlaced.push(bestSlot);
+      }
+    }
+  }
+
+  placeSpread(rareSyms, true);
+  placeSpread(midSyms, false);
+
+  // Low-pays: queue them in cluster-runs, then fill leftover slots in order.
+  // Empty slots are themselves clustered (the gaps between placed rares/mids),
+  // so consecutive queue entries land as runs in the strip.
+  var queue = [];
+  for (var li = 0; li < lowSyms.length; li++) {
+    var lsym = lowSyms[li];
+    var rem = counts[lsym] || 0;
+    while (rem > 0) {
+      var clusterSize = Math.min(rem, 2 + (li % 2)); // 2 or 3
+      for (var cs = 0; cs < clusterSize; cs++) queue.push(lsym);
+      rem -= clusterSize;
+    }
+  }
+  var qi = 0;
+  for (var f2 = 0; f2 < len; f2++) {
+    if (strip[f2] === null && qi < queue.length) {
+      strip[f2] = queue[qi++];
+    }
+  }
+  return strip;
+}
+
 const REEL_STRIPS = [
-  // Reel 0 (no wild)
-  ['compass','compass','compass','compass','compass','compass','compass','compass','compass','compass',
-   'anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor',
-   'rum','rum','rum','rum','rum','rum','rum','rum',
-   'cannon','cannon','cannon','cannon','cannon','cannon','cannon','cannon',
-   'parrot','parrot','parrot','parrot','parrot',
-   'ship','ship','ship','ship','ship',
-   'hat','hat','hat','hat',
-   'swords','swords','swords','swords',
-   'chest','chest','chest',
-   'skull','skull',
-   'captain',
-   'scatter','scatter',
-   'bonus','bonus'],
-  // Reel 1 (has wild)
-  ['compass','compass','compass','compass','compass','compass','compass','compass','compass',
-   'anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor',
-   'rum','rum','rum','rum','rum','rum','rum',
-   'cannon','cannon','cannon','cannon','cannon','cannon','cannon',
-   'parrot','parrot','parrot','parrot','parrot',
-   'ship','ship','ship','ship','ship',
-   'hat','hat','hat','hat',
-   'swords','swords','swords','swords',
-   'chest','chest','chest',
-   'skull','skull',
-   'captain',
-   'wild','wild','wild',
-   'scatter','scatter',
-   'bonus'],
-  // Reel 2 (has wild)
-  ['compass','compass','compass','compass','compass','compass','compass','compass','compass',
-   'anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor',
-   'rum','rum','rum','rum','rum','rum','rum',
-   'cannon','cannon','cannon','cannon','cannon','cannon','cannon',
-   'parrot','parrot','parrot','parrot','parrot',
-   'ship','ship','ship','ship','ship',
-   'hat','hat','hat','hat',
-   'swords','swords','swords','swords',
-   'chest','chest','chest',
-   'skull','skull',
-   'captain',
-   'wild','wild','wild',
-   'scatter','scatter',
-   'bonus','bonus'],
-  // Reel 3 (has wild)
-  ['compass','compass','compass','compass','compass','compass','compass','compass','compass',
-   'anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor',
-   'rum','rum','rum','rum','rum','rum','rum',
-   'cannon','cannon','cannon','cannon','cannon','cannon','cannon',
-   'parrot','parrot','parrot','parrot','parrot',
-   'ship','ship','ship','ship','ship',
-   'hat','hat','hat','hat',
-   'swords','swords','swords','swords',
-   'chest','chest','chest',
-   'skull','skull',
-   'captain',
-   'wild','wild','wild',
-   'scatter','scatter',
-   'bonus'],
-  // Reel 4 (has wild)
-  ['compass','compass','compass','compass','compass','compass','compass','compass','compass','compass',
-   'anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor','anchor',
-   'rum','rum','rum','rum','rum','rum','rum','rum',
-   'cannon','cannon','cannon','cannon','cannon','cannon','cannon','cannon',
-   'parrot','parrot','parrot','parrot','parrot',
-   'ship','ship','ship','ship','ship',
-   'hat','hat','hat','hat',
-   'swords','swords','swords','swords',
-   'chest','chest','chest',
-   'skull','skull',
-   'captain',
-   'wild','wild','wild',
-   'scatter','scatter',
-   'bonus','bonus'],
+  // Reel 0 — no wild, low symbol density bumped (compass/anchor/rum/cannon)
+  buildReelStrip({
+    compass: 10, anchor: 10, rum: 8, cannon: 8,
+    parrot: 5, ship: 5, hat: 4, swords: 4,
+    chest: 3, skull: 2, captain: 1,
+    scatter: 2, bonus: 2,
+  }),
+  // Reel 1 — has wild, slightly leaner low-pays
+  buildReelStrip({
+    compass: 9, anchor: 9, rum: 7, cannon: 7,
+    parrot: 5, ship: 5, hat: 4, swords: 4,
+    chest: 3, skull: 2, captain: 1,
+    wild: 3, scatter: 2, bonus: 1,
+  }),
+  // Reel 2 — bonus reel (3 bonus symbols here gate the wheel feature)
+  buildReelStrip({
+    compass: 9, anchor: 9, rum: 7, cannon: 7,
+    parrot: 5, ship: 5, hat: 4, swords: 4,
+    chest: 3, skull: 2, captain: 1,
+    wild: 3, scatter: 2, bonus: 2,
+  }),
+  // Reel 3
+  buildReelStrip({
+    compass: 9, anchor: 9, rum: 7, cannon: 7,
+    parrot: 5, ship: 5, hat: 4, swords: 4,
+    chest: 3, skull: 2, captain: 1,
+    wild: 3, scatter: 2, bonus: 1,
+  }),
+  // Reel 4 — bonus reel + heavier low-pay tail (matches reel 0)
+  buildReelStrip({
+    compass: 10, anchor: 10, rum: 8, cannon: 8,
+    parrot: 5, ship: 5, hat: 4, swords: 4,
+    chest: 3, skull: 2, captain: 1,
+    wild: 3, scatter: 2, bonus: 2,
+  }),
 ];
 
 // Free spins config

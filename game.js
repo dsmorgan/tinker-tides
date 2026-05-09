@@ -103,6 +103,7 @@ var evaluatePaylines     = Engine.evaluatePaylines;
 var countSymbol          = Engine.countSymbol;
 var checkBonusTrigger    = Engine.checkBonusTrigger;
 var checkTreasureHunt    = Engine.checkTreasureHunt;
+var checkJackpotTrigger  = Engine.checkJackpotTrigger;
 
 // ─── Rendering ───────────────────────────────────────────────────────
 var $id = function(id) { return document.getElementById(id); };
@@ -130,7 +131,7 @@ function renderGrid(grid, highlightPositions) {
       var symId = grid[r][row];
       var sym = SYMBOLS[symId];
       var cell = document.createElement('div');
-      cell.className = 'symbol-cell';
+      cell.className = 'symbol-cell is-landed';
       cell.style.height = cellH + 'px';
       cell.style.minHeight = cellH + 'px';
       cell.dataset.reel = r;
@@ -332,23 +333,64 @@ async function showCardInsert() {
 }
 
 // ─── Bill inserter ───────────────────────────────────────────────────
-// Brief "inserting" pulse on the Insert button (slot UI is built into the
-// button itself), then add credits. The old standalone bill-inserter slot
-// + flying-bill animation was removed when the spin row absorbed the button.
+// Full bill-reader sequence:
+//   1. Insert animation (~1.8s) — bill rises into the slot
+//   2. Indicator blinks WHITE 5×        — "reading the bill"
+//   3a. 9-in-10:  indicator turns GREEN — Cash ticks up over 2s
+//   3b. 1-in-10:  indicator turns RED   — bill is ejected (reverse animation),
+//                                         credits stay where they were so the
+//                                         user can click Insert again to retry.
+var BILL_REJECT_RATE = 0.10;
 async function insertBill() {
   if (billInserting) return;
   billInserting = true;
 
   var insertBtn = $id('insertBtn');
+  var indicator = $id('billIndicator');
+
+  // Reset indicator to its idle (off) state
+  if (indicator) {
+    indicator.classList.remove('blinking', 'green', 'red');
+  }
+
+  // Phase 1 — bill rises into the slot
   if (insertBtn) insertBtn.classList.add('inserting');
-  await sleep(650);
+  await sleep(1800);
   if (insertBtn) insertBtn.classList.remove('inserting');
 
-  // Add credits
-  state.credits += BILL_VALUE;
-  state.totalInserted += BILL_VALUE;
-  saveState();
-  updateUI();
+  // Phase 2 — indicator blinks white 5 times (~350ms × 2 per cycle = ~700ms × 5 ≈ 1.75s)
+  // The CSS keyframe alternates 0.35s, so 5 full blinks ≈ 1750ms total.
+  if (indicator) indicator.classList.add('blinking');
+  await sleep(1750);
+  if (indicator) indicator.classList.remove('blinking');
+
+  // Phase 3 — accept or reject
+  var rejected = Math.random() < BILL_REJECT_RATE;
+
+  if (rejected) {
+    // RED light, then eject the bill back out the slot. No credit change.
+    if (indicator) indicator.classList.add('red');
+    await sleep(450);
+    if (insertBtn) insertBtn.classList.add('ejecting');
+    await sleep(1000);
+    if (insertBtn) insertBtn.classList.remove('ejecting');
+    // Brief tail on the red indicator so the user clearly registers the reject
+    await sleep(400);
+    if (indicator) indicator.classList.remove('red');
+  } else {
+    // GREEN light + tick the Cash display up by BILL_VALUE over ~2s
+    if (indicator) indicator.classList.add('green');
+    var startCredits = state.credits;
+    var endCredits = startCredits + BILL_VALUE;
+    state.credits = endCredits;
+    state.totalInserted += BILL_VALUE;
+    tickUp('cashDisplay', startCredits, endCredits, 2000, formatCash);
+    await sleep(2000);
+    displayedCredits = Math.floor(state.credits);
+    saveState();
+    updateUI();
+    if (indicator) indicator.classList.remove('green');
+  }
 
   billInserting = false;
 }
@@ -358,27 +400,37 @@ function formatNum(n) {
 }
 
 // ─── Spin Animation ──────────────────────────────────────────────────
-// Outer wrapper: kicks off the first spin, then auto-plays remaining free
-// spins until the session ends (waits for the win showcase between spins).
+// Outer wrapper: kicks off one spin, then auto-plays REMAINING free spins
+// once the user has manually started the session.
+//
+// Flow when free spins are awarded:
+//   1. User clicks SPIN (paid trigger spin). singleSpin runs as a paid spin.
+//      Auto-loop check sees wasFree=false → exits. Button now says "FREE SPIN".
+//   2. User clicks SPIN again to start the FIRST free spin (manual).
+//   3. After that first free spin returns (wasFree=true), the auto-loop kicks
+//      in and runs the remaining free spins back-to-back.
 async function doSpin() {
   if (spinning) return;
   spinning = true;
 
-  var lastWinCount = await singleSpin();
+  var result = await singleSpin();
 
-  while (state.freeSpins.active && state.freeSpins.remaining > 0) {
+  // Auto-loop only if the last spin we just ran was itself a free spin.
+  // The trigger paid spin (wasFree=false) doesn't auto-cascade into free
+  // spins — the user clicks SPIN once to start them.
+  while (result.wasFree && state.freeSpins.active && state.freeSpins.remaining > 0) {
     // Wait for at least one full phase-3 showcase cycle if the previous spin
     // had wins, otherwise a brief breather between dry free spins.
     var waitMs;
-    if (lastWinCount > 0) {
-      waitMs = lastWinCount * (SHOWCASE_FADE_MS + SHOWCASE_LINE_MS)
+    if (result.winCount > 0) {
+      waitMs = result.winCount * (SHOWCASE_FADE_MS + SHOWCASE_LINE_MS)
              + (SHOWCASE_FADE_MS + SHOWCASE_ALL_MS)
              + (SHOWCASE_FADE_MS + SHOWCASE_BLANK_MS);
     } else {
       waitMs = 800;
     }
     await sleep(waitMs);
-    lastWinCount = await singleSpin();
+    result = await singleSpin();
   }
 
   spinning = false;
@@ -401,7 +453,7 @@ async function singleSpin() {
     if (state.credits < totalBet) {
       spinning = false;
       showRefillPrompt();
-      return 0;
+      return { winCount: 0, wasFree: false };
     }
     state.credits -= totalBet;
     state.totalBet += totalBet;
@@ -439,16 +491,38 @@ async function singleSpin() {
     saveState();
   }
 
-  return processResult ? processResult.winCount : 0;
+  return {
+    winCount: processResult ? processResult.winCount : 0,
+    wasFree: isFree,
+  };
 }
 
-// Check if reel r has a partial match building from left
+// Check if reel r has a partial match building from left.
+// Returns true for either: (a) 3+ payline match through reels 0..r-1, OR
+// (b) 2+ skull scatters in reels 0..r-1 (where landing one more skull on
+// reel r could trigger the Jackpot Picker). Same trick is used for chest +
+// scatter so the player gets reel-stop tension on every potential trigger.
 function hasNearWin(targetGrid, reelIdx) {
+  if (reelIdx < 2) return false;
+  // Scatter near-misses: count skulls / chests / scatters in the prior reels;
+  // one more on reel r could complete the 3+ trigger.
+  var scatters = ['skull', 'chest', 'scatter'];
+  for (var si = 0; si < scatters.length; si++) {
+    var sc = scatters[si];
+    var scatterCount = 0;
+    for (var rs = 0; rs < reelIdx; rs++) {
+      for (var rowS = 0; rowS < ROWS; rowS++) {
+        if (targetGrid[rs][rowS] === sc) scatterCount++;
+      }
+    }
+    if (scatterCount >= 2) return true;
+  }
+  // Payline near-miss (3+ matching from reel 0)
   if (reelIdx < 3) return false;
   for (var li = 0; li < PAYLINES.length; li++) {
     var line = PAYLINES[li];
     var first = targetGrid[0][line[0]];
-    if (first === 'scatter' || first === 'bonus') continue;
+    if (first === 'scatter' || first === 'bonus' || first === 'chest' || first === 'skull') continue;
     var matchCount = 1;
     for (var ri = 1; ri < reelIdx; ri++) {
       var sym = targetGrid[ri][line[ri]];
@@ -664,10 +738,26 @@ async function processSpinResult(grid, isFree) {
   var treasureResult = checkTreasureHunt(grid);
   if (treasureResult.triggered) {
     state.stats.bonusesTriggered++;
-    var thOutcome = await triggerTreasureHunt();
+    // Glow every chest scatter on the grid so the player can see what triggered TH
+    setTriggerGlow(treasureResult.positions);
+    var thOutcome = await triggerTreasureHunt(treasureResult.count);
     if (thOutcome && thOutcome.amount > 0) {
       bonusWins.push({ bonus: true, label: thOutcome.label, amount: thOutcome.amount });
     }
+  }
+  var jackpotResult = checkJackpotTrigger(grid);
+  if (jackpotResult.triggered) {
+    state.stats.bonusesTriggered++;
+    // Glow every skull on the grid so the player sees what triggered the picker
+    setTriggerGlow(jackpotResult.positions);
+    var jpOutcome = await triggerJackpotPicker(jackpotResult.count);
+    if (jpOutcome && jpOutcome.amount > 0) {
+      bonusWins.push({ bonus: true, label: jpOutcome.label, amount: jpOutcome.amount });
+    }
+  } else if (jackpotResult.count === 2) {
+    // 2 skulls — didn't trigger, but pulse them red so the player feels the
+    // near-miss. Glow class is cleared by the next spin's pre-cleanup.
+    setSkullNearMiss(jackpotResult.positions);
   }
 
   // Single payline evaluation (no cascade)
@@ -764,14 +854,37 @@ async function processSpinResult(grid, isFree) {
     showWinAmount(displayedWin); // ensures win-flash class applied after the tick-up
     await sleep(300);
 
+    // Transition between Phase 2 (per-line) and Phase 3 (looping showcase):
+    // light up ALL paylines + every winning cell, show "Total: X credits"
+    // callout, dwell 1500ms. Bonus entries don't have paylines/cells so they
+    // contribute amount-only to the total. Mirrors Phase 3's all-lines step.
+    var transitionWins = [];
+    var transitionHl = [];
+    for (var twi = 0; twi < winData.length; twi++) {
+      if (winData[twi].bonus) continue;
+      transitionWins.push(winData[twi].win);
+      for (var thi = 0; thi < winData[twi].win.count; thi++) {
+        transitionHl.push(winData[twi].win.positions[thi]);
+      }
+    }
+    if (transitionWins.length > 0) {
+      setWinHighlight(transitionHl);
+      drawPaylines(transitionWins);
+    } else {
+      setWinHighlight(null);
+      clearPaylineOverlay();
+    }
+    showWinLineCallout('Total: ' + formatNum(Math.floor(totalWin)) + ' credits');
+    await sleep(3000);
+
     // Phase 3: keep cycling through each winning line + callout until the
     // next spin (cancelWinShowcase is called from doSpin's pre-spin cleanup).
     startWinShowcase(winData);
   }
 
-  if (!isFree) {
-    await checkRandomJackpot();
-  }
+  // (Random per-spin progressive trigger removed — jackpots now fire only
+  // from the visible skull-scatter picker, the wheel JACKPOT segment, and TH
+  // jackpot chests. JACKPOT_CONFIG.*.triggerChance left at 0 for safety.)
 
   currentGrid = grid;
   // Entry count drives doSpin's auto-play sleep (one showcase cycle worth).
@@ -852,23 +965,26 @@ async function triggerFreeSpins(scatterResult, isDuringFreeSpins) {
 }
 
 // ─── Treasure Hunt ───────────────────────────────────────────────────
-async function triggerTreasureHunt() {
+// chestCount = number of scatter chests that triggered TH (3, 4, or 5).
+// Drives the starting multiplier inside TH per TREASURE_HUNT_CONFIG.startMultiplier.
+async function triggerTreasureHunt(chestCount) {
   return new Promise(function(resolve) {
     showNotification('TREASURE HUNT!', 'bonus-notify');
     setTimeout(function() {
-      openTreasureHunt(resolve);
+      openTreasureHunt(resolve, chestCount);
     }, 2000);
   });
 }
 
-function openTreasureHunt(onComplete) {
+function openTreasureHunt(onComplete, chestCount) {
   var modal = $id('modal');
   var contentEl = $id('modalContent');
   modal.classList.remove('hidden');
 
   var totalBet = state.betPerLine * NUM_LINES;
   var totalPrize = 0;
-  var multiplier = 1;
+  var startMult = TREASURE_HUNT_CONFIG.startMultiplier || {};
+  var multiplier = startMult[chestCount] || 1;
   var finished = false;
 
   // Track which chests are opened individually
@@ -1043,6 +1159,208 @@ async function triggerWheelOfFortune() {
       openWheel(resolve);
     }, 2000);
   });
+}
+
+// ─── Jackpot Picker (3+ skulls) ──────────────────────────────────────
+// 3×3 reveal grid. Each tile is one of: blank / Mini / Major / Grand.
+// Player picks one tile at a time. Win when 3 of any tier are revealed.
+// Bust when 3 blanks are revealed. Lots of "2 of tier!" near-miss tension.
+async function triggerJackpotPicker(skullCount) {
+  return new Promise(function(resolve) {
+    showNotification('JACKPOT PICKER!', 'bonus-notify');
+    setTimeout(function() {
+      openJackpotPicker(resolve, skullCount);
+    }, 2000);
+  });
+}
+
+function openJackpotPicker(onComplete, skullCount) {
+  var modal = $id('modal');
+  var contentEl = $id('modalContent');
+  modal.classList.remove('hidden');
+  contentEl.textContent = '';
+
+  var cfg = JACKPOT_PICKER_CONFIG;
+
+  // Pre-roll all 9 tiles up front (matches engine.runJackpotPicker shape so
+  // the visual outcome distribution mirrors the headless sim).
+  var totalWeight = 0;
+  for (var ti = 0; ti < cfg.tiles.length; ti++) totalWeight += cfg.tiles[ti].weight;
+  function rollTile() {
+    var roll = Math.random() * totalWeight;
+    var cum = 0;
+    for (var pi = 0; pi < cfg.tiles.length; pi++) {
+      cum += cfg.tiles[pi].weight;
+      if (roll < cum) return cfg.tiles[pi].type;
+    }
+    return 'blank';
+  }
+  var tiles = [];
+  for (var t = 0; t < cfg.gridSize; t++) tiles.push(rollTile());
+  // Pre-shuffle so click order doesn't matter (player picks an unrevealed tile)
+  for (var s = tiles.length - 1; s > 0; s--) {
+    var j = Math.floor(Math.random() * (s + 1));
+    var tmp = tiles[s]; tiles[s] = tiles[j]; tiles[j] = tmp;
+  }
+
+  var revealed = new Array(cfg.gridSize).fill(false);
+  var counts = { blank: 0, mini: 0, major: 0, grand: 0 };
+  var finished = false;
+  var wonTier = null;
+
+  // Header + tier-progress tracker + grid + result + close button
+  var wrap = document.createElement('div');
+  wrap.className = 'jackpot-picker';
+
+  var h2 = document.createElement('h2');
+  h2.textContent = 'JACKPOT PICKER';
+  wrap.appendChild(h2);
+
+  var hint = document.createElement('div');
+  hint.className = 'jp-hint';
+  hint.textContent = 'Reveal 3 of the same tier to win it. Avoid 3 ☠ Blanks!';
+  wrap.appendChild(hint);
+
+  // Tier progress meter
+  var tracker = document.createElement('div');
+  tracker.className = 'jp-tracker';
+  function makeMeter(tier, label) {
+    var box = document.createElement('div');
+    box.className = 'jp-tier jp-tier-' + tier;
+    var lab = document.createElement('span');
+    lab.className = 'jp-tier-label';
+    lab.textContent = label;
+    box.appendChild(lab);
+    var dotsWrap = document.createElement('span');
+    dotsWrap.className = 'jp-dots';
+    for (var d = 0; d < cfg.matchToWin; d++) {
+      var dot = document.createElement('span');
+      dot.className = 'jp-dot';
+      dotsWrap.appendChild(dot);
+    }
+    box.appendChild(dotsWrap);
+    return box;
+  }
+  var miniMeter  = makeMeter('mini',  'Mini');
+  var majorMeter = makeMeter('major', 'Major');
+  var grandMeter = makeMeter('grand', 'Grand');
+  var blankMeter = makeMeter('blank', '☠ Blank');
+  blankMeter.classList.add('jp-tier-bust');
+  tracker.appendChild(miniMeter);
+  tracker.appendChild(majorMeter);
+  tracker.appendChild(grandMeter);
+  tracker.appendChild(blankMeter);
+  wrap.appendChild(tracker);
+
+  // 3×3 grid of tiles
+  var grid = document.createElement('div');
+  grid.className = 'jp-grid';
+  var tileEls = [];
+  for (var i = 0; i < cfg.gridSize; i++) {
+    (function(idx) {
+      var tile = document.createElement('button');
+      tile.className = 'jp-tile';
+      tile.dataset.idx = idx;
+      var face = document.createElement('span');
+      face.className = 'jp-face';
+      face.textContent = '☠'; // facedown shows a skull
+      tile.appendChild(face);
+      tile.addEventListener('click', function() { pickTile(idx); });
+      grid.appendChild(tile);
+      tileEls.push(tile);
+    })(i);
+  }
+  wrap.appendChild(grid);
+
+  var resultDiv = document.createElement('div');
+  resultDiv.className = 'jp-result';
+  wrap.appendChild(resultDiv);
+
+  // Pre-allocate the close button so the modal doesn't reflow when it appears
+  var closeBtn = document.createElement('button');
+  closeBtn.className = 'modal-close';
+  closeBtn.textContent = 'CONTINUE';
+  closeBtn.style.visibility = 'hidden';
+  var pendingPayout = { amount: 0, label: 'Jackpot' };
+  closeBtn.addEventListener('click', function() {
+    modal.classList.add('hidden');
+    onComplete({ amount: pendingPayout.amount, label: pendingPayout.label });
+  });
+  wrap.appendChild(closeBtn);
+
+  contentEl.appendChild(wrap);
+
+  function updateMeter(meter, count) {
+    var dots = meter.querySelectorAll('.jp-dot');
+    for (var k = 0; k < dots.length; k++) {
+      if (k < count) dots[k].classList.add('lit');
+      else dots[k].classList.remove('lit');
+    }
+    if (count === cfg.matchToWin - 1) meter.classList.add('jp-tier-near'); // "almost!"
+    else meter.classList.remove('jp-tier-near');
+  }
+
+  function tierToReveal(type) {
+    switch (type) {
+      case 'mini':  return { glyph: '$', label: 'MINI',  cls: 'jp-mini'  };
+      case 'major': return { glyph: '$$', label: 'MAJOR', cls: 'jp-major' };
+      case 'grand': return { glyph: '$$$', label: 'GRAND', cls: 'jp-grand' };
+      default:      return { glyph: '☠',   label: '',      cls: 'jp-blank' };
+    }
+  }
+
+  async function pickTile(idx) {
+    if (finished || revealed[idx]) return;
+    revealed[idx] = true;
+    var type = tiles[idx];
+    counts[type]++;
+
+    // Reveal animation
+    var tile = tileEls[idx];
+    var info = tierToReveal(type);
+    tile.classList.add('revealed', info.cls);
+    var face = tile.querySelector('.jp-face');
+    if (face) face.textContent = info.glyph;
+    tile.disabled = true;
+
+    // Update tier meters
+    updateMeter(miniMeter,  counts.mini);
+    updateMeter(majorMeter, counts.major);
+    updateMeter(grandMeter, counts.grand);
+    updateMeter(blankMeter, counts.blank);
+
+    // Check end conditions
+    if (counts.mini  >= cfg.matchToWin) wonTier = 'mini';
+    else if (counts.major >= cfg.matchToWin) wonTier = 'major';
+    else if (counts.grand >= cfg.matchToWin) wonTier = 'grand';
+    var busted = (!wonTier && counts.blank >= cfg.bustOn);
+
+    if (wonTier || busted) {
+      finished = true;
+      // Disable remaining tiles
+      for (var d = 0; d < tileEls.length; d++) tileEls[d].disabled = true;
+
+      await sleep(600); // beat to register the final reveal
+
+      if (wonTier) {
+        var amount = Math.floor(state.jackpots[wonTier]);
+        // Reset the pool now that it's been won
+        state.jackpots[wonTier] = JACKPOT_CONFIG[wonTier].start;
+        state.stats.jackpotsWon[wonTier]++;
+        pendingPayout.amount = amount;
+        pendingPayout.label = wonTier.charAt(0).toUpperCase() + wonTier.slice(1) + ' Jackpot';
+        resultDiv.textContent = wonTier.toUpperCase() + ' JACKPOT — ' + formatNum(amount) + ' credits!';
+        resultDiv.classList.add('jp-win', 'jp-' + wonTier);
+      } else {
+        pendingPayout.amount = 0;
+        pendingPayout.label = 'Jackpot Picker';
+        resultDiv.textContent = 'BUSTED — 3 blanks';
+        resultDiv.classList.add('jp-bust');
+      }
+      saveState();
+      closeBtn.style.visibility = 'visible';
+    }
+  }
 }
 
 function openWheel(onComplete) {
@@ -1459,8 +1777,8 @@ function openPaytable() {
   h2.textContent = 'PAYTABLE';
   contentEl.appendChild(h2);
 
-  // Specials at the top (wild, scatter, bonus), then regular symbols high → low.
-  var order = ['wild','scatter','bonus','captain','skull','chest','swords','hat','ship','parrot','cannon','rum','anchor','compass'];
+  // Specials at the top (wild, scatter, bonus, chest, skull), then regular symbols high → low.
+  var order = ['wild','scatter','bonus','chest','skull','captain','swords','hat','ship','parrot','cannon','rum','anchor','compass'];
   for (var oi = 0; oi < order.length; oi++) {
     var id = order[oi];
     var sym = SYMBOLS[id];
@@ -1503,6 +1821,16 @@ function openPaytable() {
       var s3 = document.createElement('span');
       s3.textContent = '3 on reels 1,3,5 \u2192 Wheel';
       paysDiv.appendChild(s3);
+    } else if (id === 'chest') {
+      // Chest is a pure scatter trigger \u2014 no payline pay.
+      var ch = document.createElement('span');
+      ch.textContent = '3+ anywhere \u2192 Treasure Hunt (\u00d71 / \u00d72 / \u00d73 multiplier)';
+      paysDiv.appendChild(ch);
+    } else if (id === 'skull') {
+      // Skull is a pure scatter trigger for the Jackpot Picker.
+      var sk = document.createElement('span');
+      sk.textContent = '3+ anywhere \u2192 Jackpot Picker (Mini / Major / Grand)';
+      paysDiv.appendChild(sk);
     } else {
       // Loop from pay[1] (2-of-a-kind) through pay[4] (5-of-a-kind);
       // skip tiers that don't pay so the row stays clean.
@@ -1524,10 +1852,10 @@ function openPaytable() {
 
   var features = [
     ['Free Spins:', '3+ Scatter = 8-15 free spins with \u00d72 multiplier. Can retrigger.', '#c084fc'],
-    ['Treasure Hunt:', 'Captain on reels 1 & 5 \u2192 pick chests for prizes!', 'var(--red)'],
+    ['Treasure Hunt:', '3+ Treasure Chests anywhere \u2192 pick chests for prizes! 4 chests = \u00d72, 5 = \u00d73 starting multiplier.', 'var(--red)'],
     ['Wheel of Fortune:', '3 Ship Wheels on reels 1, 3, 5 \u2192 spin the wheel!', 'var(--red)'],
     ['Mystery Reel:', '4-of-a-kind on reels 1-4 \u2192 reel 5 swaps to a boosted strip with extra wilds.', 'var(--gold)'],
-    ['Jackpots:', 'Mini, Major, Grand \u2014 triggered randomly or via bonuses.', 'var(--gold)'],
+    ['Jackpot Picker:', '3+ Skulls anywhere \u2192 3\u00d73 reveal grid. Match 3 of a tier to win Mini/Major/Grand.', 'var(--gold)'],
   ];
   var featWrap = document.createElement('div');
   featWrap.style.cssText = 'font-size:11px;color:var(--text-muted);line-height:1.6';
@@ -1755,6 +2083,22 @@ function setTriggerGlow(positions) {
 function clearTriggerGlow() {
   var current = document.querySelectorAll('.symbol-cell.bonus-trigger-glow');
   for (var i = 0; i < current.length; i++) current[i].classList.remove('bonus-trigger-glow');
+  clearSkullNearMiss();
+}
+
+// Pulses red on the 2 skulls when the player almost (but didn't quite) trigger
+// the Jackpot Picker. Cleared by clearTriggerGlow on the next spin's cleanup.
+function setSkullNearMiss(positions) {
+  clearSkullNearMiss();
+  if (!positions) return;
+  for (var p = 0; p < positions.length; p++) {
+    var cell = document.querySelector('.symbol-cell[data-reel="' + positions[p].reel + '"][data-row="' + positions[p].row + '"]');
+    if (cell) cell.classList.add('skull-near-miss');
+  }
+}
+function clearSkullNearMiss() {
+  var current = document.querySelectorAll('.symbol-cell.skull-near-miss');
+  for (var i = 0; i < current.length; i++) current[i].classList.remove('skull-near-miss');
 }
 
 function showWinLineCallout(text) {
@@ -2003,6 +2347,9 @@ function init() {
   });
   wireDebug('dbgJackpotGrand', function() {
     showJackpotWin('grand');
+  });
+  wireDebug('dbgJackpotPicker', function() {
+    openJackpotPicker(function() { updateUI(); saveState(); }, 3);
   });
   wireDebug('dbgCascade', function() {
     var forced = generateGrid();

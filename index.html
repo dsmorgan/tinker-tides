@@ -679,34 +679,170 @@ body::after{
   to  {filter:drop-shadow(0 0 18px rgba(255,200,140,.85)) drop-shadow(0 0 32px rgba(255,180,80,.65))}
 }
 
-/* CHEST — bright gold bg + dark brown icon */
+/* CHEST — gold bg + dark brown icon + "TREASURE" / "HUNT" labels framing the
+   chest icon (top + bottom). Chest is now a SCATTER trigger for Treasure Hunt
+   (3+ anywhere on the grid), so the labels make the trigger obvious. Colors
+   chosen to blend into the gold cell — dark brown text with subtle highlight. */
 .symbol-cell.sym-chest{
   background:#daa520 !important;
 }
+/* Override the universal vignette ::before with the TOP "TREASURE" label */
+.symbol-cell.sym-chest::before{
+  content:'TREASURE';
+  background:none;
+  position:absolute;
+  top:4%;left:0;right:0;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:0.85em;
+  letter-spacing:0.05em;
+  color:#3a1d04;
+  text-shadow:0 1px 0 rgba(255,235,150,.35);
+  transform:scaleX(1.05);
+  pointer-events:none;
+  z-index:2;
+  line-height:1;
+}
+.symbol-cell.sym-chest::after{
+  content:'HUNT';
+  position:absolute;
+  bottom:4%;left:0;right:0;
+  text-align:center;
+  font-family:'Impact','Arial Black',sans-serif;
+  font-weight:900;
+  font-size:1em;
+  letter-spacing:0.1em;
+  color:#3a1d04;
+  text-shadow:0 1px 0 rgba(255,235,150,.35);
+  transform:scaleX(1.1);
+  pointer-events:none;
+  z-index:2;
+  line-height:1;
+}
 .symbol-cell.sym-chest .sym-icon{
+  width:55% !important;height:55% !important;
   background:radial-gradient(circle,#1f0d02,#0a0500) !important;
   filter:drop-shadow(0 1px 1px rgba(255,255,255,.25));
+  position:relative;
+  z-index:1;
 }
 
-/* SKULL & CAPTAIN — constant silver halo */
-.symbol-cell.sym-skull,
-.symbol-cell.sym-captain{
-  background:#263238 !important;
+/* SKULL — dark bg + flickering orange/red flame aura + ghostly red icon glow.
+   The flame and icon glow only animate when the cell is .is-landed (added in
+   renderGrid, NOT in makeSpinCell), so reels look clean while spinning. */
+.symbol-cell.sym-skull{
+  background:radial-gradient(ellipse at 50% 70%, #2a0a04 0%, #140503 70%, #0a0201 100%) !important;
 }
-.symbol-cell.sym-skull::after,
+.symbol-cell.sym-skull::after{
+  content:'';position:absolute;
+  top:50%;left:50%;
+  width:108%;height:112%;
+  transform:translate(-50%,-50%);
+  background:
+    radial-gradient(ellipse at 50% 65%,
+      rgba(255,210,90,.55) 0%,
+      rgba(255,110,30,.45) 22%,
+      rgba(190,40,10,.28) 45%,
+      transparent 72%);
+  filter:blur(2.5px);
+  pointer-events:none;
+  z-index:0;
+  border-radius:50%;
+  opacity:.85;
+}
+.symbol-cell.sym-skull.is-landed::after{
+  animation:skullFlame 1.3s ease-in-out infinite alternate;
+}
+@keyframes skullFlame{
+  0%   { transform:translate(-50%,-50%) scale(0.92,0.96); opacity:0.78; filter:blur(2.5px) hue-rotate(-6deg); }
+  35%  { transform:translate(-50%,-52%) scale(1.08,1.12); opacity:1.0;  filter:blur(3.5px) hue-rotate(2deg); }
+  60%  { transform:translate(-50%,-49%) scale(0.96,1.02); opacity:0.85; filter:blur(2px)   hue-rotate(8deg); }
+  100% { transform:translate(-50%,-51%) scale(1.05,1.10); opacity:0.95; filter:blur(3px)   hue-rotate(-4deg); }
+}
+.symbol-cell.sym-skull .sym-icon{
+  background:radial-gradient(circle,#fff,#ece5d3 55%,#bbb) !important;
+  position:relative;
+  z-index:1;
+}
+.symbol-cell.sym-skull.is-landed .sym-icon{
+  animation:skullEyeGlow 0.95s ease-in-out infinite alternate;
+}
+@keyframes skullEyeGlow{
+  from{ filter:drop-shadow(0 0 3px rgba(255,80,40,.55))
+              drop-shadow(0 0 9px rgba(220,30,10,.40)); }
+  to  { filter:drop-shadow(0 0 8px rgba(255,140,60,.95))
+              drop-shadow(0 0 22px rgba(255,40,10,.75)); }
+}
+
+/* CAPTAIN — dark bg + pulsing gold halo + diagonal shimmer sweep + slow bob.
+   ::after carries the halo, ::before (overriding the universal vignette) carries
+   the shimmer sweep that travels across the icon every few seconds. Effects
+   activate only when .is-landed is present. */
+.symbol-cell.sym-captain{
+  background:radial-gradient(ellipse at 50% 50%, #2e3a45 0%, #1a242c 70%, #0e1418 100%) !important;
+  overflow:hidden;
+}
+.symbol-cell.sym-captain::before{
+  content:'';
+  position:absolute;inset:0;
+  background:linear-gradient(115deg,
+    transparent 38%,
+    rgba(255,250,210,0) 46%,
+    rgba(255,250,210,.55) 50%,
+    rgba(255,250,210,0) 54%,
+    transparent 62%);
+  background-size:260% 100%;
+  background-position:-60% 0;
+  pointer-events:none;
+  z-index:3;
+  mix-blend-mode:screen;
+  opacity:0;
+}
+.symbol-cell.sym-captain.is-landed::before{
+  animation:captainShimmer 3.6s ease-in-out infinite;
+  animation-delay:.6s;
+}
+@keyframes captainShimmer{
+  0%       { background-position:-60% 0; opacity:0; }
+  10%      { opacity:.95; }
+  55%      { background-position:160% 0; opacity:.85; }
+  60%,100% { background-position:160% 0; opacity:0; }
+}
 .symbol-cell.sym-captain::after{
   content:'';position:absolute;
   top:50%;left:50%;
-  width:95%;height:95%;
+  width:100%;height:100%;
   transform:translate(-50%,-50%);
   background:radial-gradient(circle at center,
-    rgba(240,248,255,.6) 0%,
-    rgba(200,220,255,.3) 30%,
-    rgba(180,200,255,.12) 55%,
+    rgba(255,225,150,.55) 0%,
+    rgba(255,200,80,.30) 28%,
+    rgba(180,120,40,.15) 55%,
     transparent 75%);
   pointer-events:none;
   z-index:0;
   border-radius:50%;
+  opacity:.7;
+}
+.symbol-cell.sym-captain.is-landed::after{
+  animation:captainHalo 1.9s ease-in-out infinite alternate;
+}
+@keyframes captainHalo{
+  from{ opacity:.65; transform:translate(-50%,-50%) scale(0.96); }
+  to  { opacity:1.0; transform:translate(-50%,-50%) scale(1.08); }
+}
+.symbol-cell.sym-captain .sym-icon{
+  background:radial-gradient(circle,#fff5d8,#f4cf6b 50%,#b8841e) !important;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
+  position:relative;
+  z-index:2;
+}
+.symbol-cell.sym-captain.is-landed .sym-icon{
+  animation:captainBob 3.4s ease-in-out infinite;
+}
+@keyframes captainBob{
+  0%,100% { transform:translateY(0); }
+  50%     { transform:translateY(-3px); }
 }
 
 /* BONUS (ship-wheel) — wood textured bg + small spinning wheel + BONUS text */
@@ -774,6 +910,17 @@ body::after{
 @keyframes bonusGlow{
   from{box-shadow:inset 0 0 10px rgba(77,208,225,.6),0 0 16px rgba(77,208,225,.5)}
   to  {box-shadow:inset 0 0 22px rgba(77,208,225,.95),0 0 36px rgba(77,208,225,.85)}
+}
+/* Skull near-miss glow — when 2 skulls land but didn't trigger the picker.
+   Pulses red so the player feels the "almost!" without confusing it with a
+   trigger (which uses cyan via .bonus-trigger-glow). */
+.symbol-cell.skull-near-miss{
+  animation:skullNearMiss 0.55s ease infinite alternate;
+  z-index:3;
+}
+@keyframes skullNearMiss{
+  from{box-shadow:inset 0 0 8px rgba(255,68,68,.5), 0 0 14px rgba(255,68,68,.4)}
+  to  {box-shadow:inset 0 0 18px rgba(255,68,68,.9), 0 0 28px rgba(255,68,68,.75)}
 }
 /* Payline overlay */
 .payline-overlay{
@@ -867,17 +1014,31 @@ body::after{
 .btn-side:active{transform:scale(0.96)}
 
 /* Insert $ — green, with a horizontal bill-slot slit at the top so it reads
-   as a "cash inserter" instead of a generic button. */
+   as a "cash inserter" instead of a generic button. The .bill-anim-100
+   element rises from below and disappears into the slot when insertBill()
+   adds .inserting (clip ensures it's invisible until it enters the button). */
 .btn-insert{
   background:radial-gradient(circle at 35% 25%,#a8d68a,#5a8a42 70%,#2f5520);
   color:#0a1a04;
   text-shadow:0 1px 1px rgba(255,255,255,.25);
-  flex-direction:column;
-  gap:4px;
-  padding-top:8px;
+  position:relative;
+  /* Slot glyph is absolute at top:8px; label flex-centers as normal. No
+     overflow clipping here — the bill animation extends BELOW the button
+     (visible over the row beneath + cabinet) and only the part ABOVE the
+     slit gets clipped (by .bill-clip's overflow:hidden). z-index lifts the
+     button and its bill above row 2 / cabinet siblings so the overflow
+     renders on top. */
+  z-index:10;
 }
+/* Slot glyph is anchored at the very top of the button via position:absolute
+   so its Y position is predictable (regardless of how flex centers the label).
+   The .bill-clip top:12px below this matches the slot's bottom edge, so the
+   bill disappears EXACTLY at the slit. */
 .btn-insert .bill-slot-glyph{
-  display:block;
+  position:absolute;
+  top:8px;
+  left:50%;
+  transform:translateX(-50%);
   width:60%;height:4px;
   background:#1a0a02;
   border-radius:0 0 4px 4px;
@@ -885,19 +1046,133 @@ body::after{
     inset 0 1px 2px rgba(0,0,0,.95),
     inset 0 -1px 0 rgba(255,255,255,.18),
     0 1px 0 rgba(255,255,255,.25);
+  z-index:3;
 }
 .btn-insert .btn-side-label{
   display:block;font-size:13px;line-height:1;
+  position:relative;z-index:1;
 }
-/* Brief "money going in" pulse triggered when insertBill() runs */
+
+/* Clip area for the bill animation — its TOP edge sits exactly where the
+   slot glyph ends (at the slit), so the bill appears to disappear into
+   the slit. The clip extends WAY below the button (250px) so the bill
+   stays visible as it rises through the row beneath and the cabinet area
+   — only the portion that crosses the slit is clipped. */
+.btn-insert .bill-clip{
+  position:absolute;
+  top:12px;          /* exactly at slot glyph bottom (8px padding + 4px slot) */
+  left:0;right:0;
+  height:480px;      /* tall enough for a slot-width bill (~180×420) to scroll through */
+  overflow:hidden;
+  pointer-events:none;
+  z-index:2;
+}
+/* Animated $100 bill — proportioned like a real US bill (~2.35:1 long:short).
+   Inserted SHORT-SIDE FIRST: the bill stands tall (long side vertical) and
+   is narrower than the slot. Because it's taller than the clip area, only a
+   horizontal strip of the bill is visible at any moment — exactly what you
+   see when feeding a real bill into a reader. */
+.btn-insert .bill-anim-100{
+  position:absolute;
+  left:50%;
+  top:0;
+  /* Width tracks the slot (60%), slightly narrower so it visually fits
+     "through" the slit. Height auto-derives from the real US bill ratio
+     (2.35:1 long:short). min/max keep proportions sane on extreme widths. */
+  width:55%;
+  min-width:90px;
+  max-width:180px;
+  aspect-ratio: 1 / 2.35;
+  transform:translate(-50%,100%);  /* default: just below the clip (invisible) */
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,.18) 0,rgba(255,255,255,.18) 1px,
+      transparent 1px,transparent 9px) repeat-y,
+    linear-gradient(135deg,#a8d68a 0%,#85bb65 40%,#5a8a42 100%);
+  border:1px solid #2d4a18;border-radius:2px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.45),
+    inset 0 0 6px rgba(0,0,0,.25),
+    0 1px 2px rgba(0,0,0,.4);
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
+  opacity:0;
+}
+/* "$100" text rotated 90° so it reads along the bill's long axis (matches
+   how text on a real bill looks when the bill is held vertically). */
+.btn-insert .bill-anim-100 .bill-text{
+  display:inline-block;
+  transform:rotate(-90deg);
+  white-space:nowrap;
+  font-family:'Courier New',monospace;
+  font-size:18px;font-weight:bold;color:#0a3a0a;
+  letter-spacing:2px;
+}
+.btn-insert.inserting .bill-anim-100{
+  animation:billInsert 1.8s linear forwards;
+}
+/* Bill starts with its TOP edge at the bottom of the Insert button (50px
+   below the slit, since clip-top sits at slot-bottom and the button is ~62px
+   tall = 50px from slot-bottom to button-bottom). It rises through the
+   button and disappears as its top crosses the slit. End offset uses calc
+   so it works regardless of computed bill height. */
+@keyframes billInsert{
+  0%   { transform:translate(-50%, 50px);                 opacity:1; }
+  100% { transform:translate(-50%, calc(-100% - 20px));   opacity:1; }
+}
 .btn-insert.inserting{
-  animation:insertPulse .65s ease;
+  animation:insertPulse 1.8s ease;
 }
 @keyframes insertPulse{
   0%   {filter:brightness(1)}
-  35%  {filter:brightness(1.5) drop-shadow(0 0 12px rgba(57,255,20,.8))}
-  70%  {filter:brightness(1.3) drop-shadow(0 0 8px rgba(57,255,20,.5))}
+  60%  {filter:brightness(1.2) drop-shadow(0 0 10px rgba(57,255,20,.6))}
   100% {filter:brightness(1)}
+}
+
+/* Eject animation — bill comes BACK out of the slot (reverse of insert) and
+   exits below the visible clip area. Used for the rare "bill rejected" path. */
+.btn-insert.ejecting .bill-anim-100{
+  animation:billEject 1.0s linear forwards;
+}
+@keyframes billEject{
+  0%   { transform:translate(-50%, calc(-100% - 20px)); opacity:1; }
+  100% { transform:translate(-50%, calc(100% + 100px)); opacity:1; }
+}
+
+/* Bill-reader indicator LED at the top-left of the Insert button.
+   States: idle (dark), blinking (white pulse — bill being read),
+   green (accepted), red (rejected). Sized like a payline indicator stripe. */
+.btn-insert .bill-indicator{
+  position:absolute;
+  top:6px;left:6px;
+  width:10px;height:10px;
+  border-radius:50%;
+  background:#1a1a25;
+  border:1px solid rgba(0,0,0,.65);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.12);
+  z-index:4;
+  pointer-events:none;
+}
+.btn-insert .bill-indicator.blinking{
+  animation:indicatorBlink .35s ease infinite alternate;
+}
+@keyframes indicatorBlink{
+  from{
+    background:#1a1a25;
+    box-shadow:inset 0 1px 1px rgba(255,255,255,.12);
+  }
+  to{
+    background:#fff;
+    box-shadow:0 0 8px rgba(255,255,255,.9), inset 0 1px 1px rgba(255,255,255,.5);
+  }
+}
+.btn-insert .bill-indicator.green{
+  background:#39ff14;
+  box-shadow:0 0 10px rgba(57,255,20,.85), inset 0 1px 1px rgba(255,255,255,.5);
+}
+.btn-insert .bill-indicator.red{
+  background:#ff3333;
+  box-shadow:0 0 10px rgba(255,51,51,.9), inset 0 1px 1px rgba(255,255,255,.5);
 }
 
 /* Cash Out — gold, SQUARE (aspect-ratio 1, height 100% of row). */
@@ -1006,6 +1281,128 @@ body::after{
 .treasure-multiplier{
   font-size:14px;color:#c084fc;margin:4px 0;
 }
+
+/* === JACKPOT PICKER (3+ skull trigger) === */
+.jackpot-picker{
+  text-align:center;
+  padding:8px 4px 16px;
+}
+.jackpot-picker h2{
+  color:var(--gold-bright);
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:24px;
+  letter-spacing:3px;
+  text-shadow:0 0 10px rgba(255,215,0,.5);
+  margin-bottom:6px;
+}
+.jp-hint{
+  font-size:12px;color:var(--text-muted);margin-bottom:12px;
+}
+.jp-tracker{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  gap:6px;margin-bottom:16px;
+}
+.jp-tier{
+  background:rgba(0,0,0,.4);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:6px;
+  padding:6px 4px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-size:10px;letter-spacing:1px;text-transform:uppercase;
+  transition:all .2s;
+}
+.jp-tier-label{font-weight:bold}
+.jp-tier-mini  .jp-tier-label{color:#cd7f32}
+.jp-tier-major .jp-tier-label{color:#c0c0c0}
+.jp-tier-grand .jp-tier-label{color:var(--gold-bright)}
+.jp-tier-bust  .jp-tier-label{color:var(--red)}
+.jp-dots{display:flex;gap:4px}
+.jp-dot{
+  width:9px;height:9px;border-radius:50%;
+  background:#1a1a25;
+  border:1px solid rgba(255,255,255,.2);
+  transition:all .2s;
+}
+.jp-tier-mini  .jp-dot.lit{background:#cd7f32;box-shadow:0 0 6px rgba(205,127,50,.8)}
+.jp-tier-major .jp-dot.lit{background:#c0c0c0;box-shadow:0 0 6px rgba(192,192,192,.8)}
+.jp-tier-grand .jp-dot.lit{background:#ffd700;box-shadow:0 0 8px rgba(255,215,0,.95)}
+.jp-tier-bust  .jp-dot.lit{background:#ff3333;box-shadow:0 0 6px rgba(255,51,51,.8)}
+/* "Almost!" — 2 dots lit, just need one more */
+.jp-tier-near{
+  border-color:currentColor;
+  animation:jpTierNear 0.6s ease infinite alternate;
+}
+@keyframes jpTierNear{
+  from{box-shadow:0 0 0 rgba(0,0,0,0)}
+  to  {box-shadow:0 0 12px rgba(255,255,255,.35)}
+}
+
+.jp-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  max-width:300px;margin:0 auto 16px;
+}
+.jp-tile{
+  aspect-ratio:1;
+  background:linear-gradient(160deg,#3a2410,#1f1208);
+  border:2px solid #5c3a1a;
+  border-radius:8px;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:32px;
+  color:rgba(255,255,255,.4);
+  font-family:'Impact','Arial Black',sans-serif;
+  transition:transform .15s, filter .15s;
+  box-shadow:inset 0 -3px 6px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.5);
+}
+.jp-tile:hover:not(.revealed):not(:disabled){
+  transform:scale(1.05);
+  filter:brightness(1.3);
+  border-color:var(--gold);
+}
+.jp-tile:disabled{cursor:default}
+.jp-tile.revealed{
+  border-color:#2a1608;
+  font-weight:900;
+  text-shadow:0 1px 2px rgba(0,0,0,.6);
+  letter-spacing:-0.04em;
+}
+.jp-tile.jp-blank{
+  background:linear-gradient(160deg,#2a2a3a,#15151f);
+  color:#5a5a6a;
+}
+.jp-tile.jp-mini{
+  background:radial-gradient(circle at 35% 30%,#e89a4a,#cd7f32 60%,#7a4a18);
+  color:#1f0d02;
+}
+.jp-tile.jp-major{
+  background:radial-gradient(circle at 35% 30%,#e8e8e8,#c0c0c0 60%,#7a7a7a);
+  color:#1a1a1a;
+}
+.jp-tile.jp-grand{
+  background:radial-gradient(circle at 35% 30%,#fff5a0,#ffd700 60%,#b8860b);
+  color:#1f0d02;
+  animation:jpGrandPulse 0.7s ease infinite alternate;
+}
+@keyframes jpGrandPulse{
+  from{box-shadow:0 0 8px rgba(255,215,0,.6), inset 0 -3px 6px rgba(0,0,0,.4)}
+  to  {box-shadow:0 0 22px rgba(255,215,0,1), inset 0 -3px 6px rgba(0,0,0,.4)}
+}
+
+.jp-result{
+  font-family:'Impact','Arial Black',sans-serif;
+  font-size:18px;letter-spacing:2px;
+  margin:8px 0 12px;
+  min-height:24px;
+}
+.jp-result.jp-win{
+  color:var(--gold-bright);
+  text-shadow:0 0 12px rgba(255,215,0,.7);
+}
+.jp-result.jp-mini{color:#cd7f32}
+.jp-result.jp-major{color:#c0c0c0}
+.jp-result.jp-grand{color:var(--gold-bright)}
+.jp-result.jp-bust{color:var(--red);text-shadow:0 0 8px rgba(255,68,68,.6)}
 
 /* === WHEEL OF FORTUNE === */
 .wheel-container{
@@ -1332,8 +1729,12 @@ body::after{
       <div class="controls-stack">
         <div class="controls-row">
           <button class="btn-side btn-insert" id="insertBtn" title="Insert money">
+            <span class="bill-indicator" id="billIndicator" aria-hidden="true"></span>
             <span class="bill-slot-glyph"></span>
             <span class="btn-side-label">INSERT $</span>
+            <span class="bill-clip" aria-hidden="true">
+              <span class="bill-anim-100"><span class="bill-text">$100</span></span>
+            </span>
           </button>
           <button class="btn-side btn-cashout" id="cashoutBtn" title="Cash out">CASH<br>OUT</button>
         </div>
@@ -1367,6 +1768,7 @@ body::after{
       <button class="debug-btn" id="dbgJackpotMini">JP Mini</button>
       <button class="debug-btn" id="dbgJackpotMajor">JP Major</button>
       <button class="debug-btn" id="dbgJackpotGrand">JP Grand</button>
+      <button class="debug-btn" id="dbgJackpotPicker">JP Picker</button>
       <button class="debug-btn" id="dbgCascade">Force 3-match</button>
       <button class="debug-btn" id="dbgBigWin">Big Win (5×Captain)</button>
       <button class="debug-btn" id="dbgRollLines">Roll Lines</button>

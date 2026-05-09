@@ -1,0 +1,66 @@
+# Tinker Tides — RTP simulation (TRUE WILD, captain bumped)
+# Generated: 2026-05-09
+# Diff vs skull-jackpots.txt:
+#   - Wild is now a TRUE wild: substitutes only, NO standalone pay
+#     (was 90/400/2400 for 3/4/5 of a kind — paid more than the captain,
+#     which never made design sense)
+#   - Captain bumped 75/300/1200 → 90/350/1500 to absorb the lost RTP
+#     and reaffirm "captain is the king" of paying symbols
+#   - Display name: "Ship" (mid-tier flag icon) → "Jolly Roger"
+#
+# Why true wild: wilds appear on reels 2-5 only. ~85% of payline
+# placements have a substitutable symbol on reel 1, so standalone wild
+# pay was just a consolation prize for the rare case where reel 1 was
+# a non-substitutable scatter/bonus/chest/skull.
+#
+# Net effect vs skull-jackpots baseline:
+#   RTP             100.72% → 100.92%   (+0.20%, within sim noise)
+#   Hit freq         30.30% →  30.29%   (identical)
+#   Paylines RTP     47.96% →  48.13%   (+0.17%, captain bump compensates)
+#   All bonus triggers, picker stats, jackpot frequencies unchanged.
+#   Captain 5-of-a-kind (1500×) now the highest single-symbol payout.
+#
+═══ Tinker Tides RTP simulation ════════════════════════════
+Spins:                            10,000,000   (12.2s, 822,978 spins/s)
+Total wagered (credits):         200,000,000
+Total returned:                  201,847,125
+────────────────────────────────────────────────────────────
+RTP:                                100.924%
+Hit frequency:                        30.29%
+Biggest win:                         362,880 credits  (18144× bet)
+
+── Win-size distribution (% of paying spins) ───────────────
+Tiny    (< 1× bet):                59.399%
+Small   (1–5× bet):                29.020%
+Mid     (5–25× bet):               10.469%
+Big     (25–100× bet):              0.918%
+Huge    (100–500× bet):             0.141%
+Mega    (500×+ bet):                0.053%
+
+── Bonus trigger frequency ─────────────────────────────────
+Free spins (3+ scatter):            0.742%   1 in 135
+Wheel of Fortune:                   0.082%   1 in 1,215
+Treasure Hunt:                      0.099%   1 in 1,007
+Jackpot Picker (3+ skull):          2.351%   1 in 43
+  → won any tier:                  31.706%   (74,533 / 235,072 picker spins)
+  → won Mini:                       60,399
+  → won Major:                      13,303
+  → won Grand:                         831
+
+── Reel-5 boost (4-of-a-kind anticipation hit) ─────────────
+Boost fired:                        2.969%   1 in 34
+Boost → 5-of-kind:                 57.029%   (169,318 / 296,899 boosted spins)
+Total 5-of-a-kind:                  1.693%   1 in 59
+
+── Total jackpot wins (picker + chest + wheel) ─────────────
+Mini:                                61613   1 in 162
+Major:                               13905   1 in 719
+Grand:                                 898   1 in 11,136
+
+── RTP contribution by source ──────────────────────────────
+Paylines:                          48.126%
+Free spins:                         6.073%
+Wheel of Fortune:                   4.868%
+Treasure Hunt:                     16.696%
+Random progressives:               25.159%
+TOTAL:                            100.924%

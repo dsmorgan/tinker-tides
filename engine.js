@@ -25,6 +25,7 @@
     var TREASURE_HUNT_CONFIG = data.TREASURE_HUNT_CONFIG;
     var WHEEL_SEGMENTS = data.WHEEL_SEGMENTS;
     var JACKPOT_CONFIG = data.JACKPOT_CONFIG;
+    var JACKPOT_PICKER_CONFIG = data.JACKPOT_PICKER_CONFIG;
 
     // ─── Reel + grid generation ──────────────────────────────────────
     // True-reel model: one random stop per reel. The 3 visible cells are
@@ -112,11 +113,14 @@
     }
 
     // ─── Payline evaluation ──────────────────────────────────────────
+    // wild / scatter / bonus / chest / skull never become the baseSymbol —
+    // they're either substitutes (wild) or pure-trigger scatters with no
+    // payline pay. Chest triggers Treasure Hunt; skull triggers Jackpot Picker.
     function evaluateLine(symbols) {
       var baseSymbol = null;
       for (var idx = 0; idx < symbols.length; idx++) {
         var s = symbols[idx];
-        if (s !== 'wild' && s !== 'scatter' && s !== 'bonus') {
+        if (s !== 'wild' && s !== 'scatter' && s !== 'bonus' && s !== 'chest' && s !== 'skull') {
           baseSymbol = s;
           break;
         }
@@ -191,14 +195,38 @@
       return { triggered: count >= 3, count: count, positions: positions };
     }
 
+    // Treasure Hunt now triggers on 3+ Treasure Chest symbols ANYWHERE (scatter
+     // behavior). The chest count drives the starting multiplier inside TH:
+     //   3 chests → ×1   4 chests → ×2   5+ chests → ×3
     function checkTreasureHunt(grid) {
-      var reel0 = false, reel4 = false;
       var positions = [];
-      for (var row = 0; row < ROWS; row++) {
-        if (grid[0][row] === 'captain') { reel0 = true; positions.push({ reel: 0, row: row }); }
-        if (grid[4][row] === 'captain') { reel4 = true; positions.push({ reel: 4, row: row }); }
+      var count = 0;
+      for (var r = 0; r < REELS; r++) {
+        for (var row = 0; row < ROWS; row++) {
+          if (grid[r][row] === 'chest') {
+            count++;
+            positions.push({ reel: r, row: row });
+          }
+        }
       }
-      return { triggered: reel0 && reel4, positions: positions };
+      return { triggered: count >= 3, count: count, positions: positions };
+    }
+
+    // Progressive Jackpot Picker triggers on 3+ Skull symbols ANYWHERE.
+    // Player picks tiles from a 3×3 grid until 3 of a tier match (win that
+    // tier) or 3 blanks come up (bust).
+    function checkJackpotTrigger(grid) {
+      var positions = [];
+      var count = 0;
+      for (var r = 0; r < REELS; r++) {
+        for (var row = 0; row < ROWS; row++) {
+          if (grid[r][row] === 'skull') {
+            count++;
+            positions.push({ reel: r, row: row });
+          }
+        }
+      }
+      return { triggered: count >= 3, count: count, positions: positions };
     }
 
     // ─── Headless spin ───────────────────────────────────────────────
@@ -226,6 +254,7 @@
       var scatterResult = countSymbol(grid, 'scatter');
       var bonusResult = checkBonusTrigger(grid);
       var treasureResult = checkTreasureHunt(grid);
+      var jackpotResult = checkJackpotTrigger(grid);
 
       var wins = evaluatePaylines(grid);
       var totalUnits = 0;
@@ -249,6 +278,9 @@
         scatterCount: scatterResult.count,
         bonusTriggered: bonusResult.triggered,
         treasureHuntTriggered: treasureResult.triggered,
+        treasureChestCount: treasureResult.count,
+        jackpotTriggered: jackpotResult.triggered,
+        jackpotSkullCount: jackpotResult.count,
       };
     }
 
@@ -328,7 +360,9 @@
     // ─── Treasure Hunt ───────────────────────────────────────────────
     // Returns credits won (assuming denom=1) by sampling chest contents
     // until a skull is opened or all chests are revealed.
-    function runTreasureHunt(jackpotPools) {
+    // chestCount = number of scatter chests that triggered TH (3, 4, or 5).
+    // Drives the starting multiplier per TREASURE_HUNT_CONFIG.startMultiplier.
+    function runTreasureHunt(jackpotPools, chestCount) {
       jackpotPools = jackpotPools || {
         mini: JACKPOT_CONFIG.mini.start,
         major: JACKPOT_CONFIG.major.start,
@@ -339,7 +373,8 @@
       for (var i = 0; i < prizes.length; i++) totalWeight += prizes[i].weight;
       var totalBet = NUM_LINES; // assuming denom=1
       var coinsCollected = 0;
-      var multiplier = 1;
+      var startMult = TREASURE_HUNT_CONFIG.startMultiplier || {};
+      var multiplier = startMult[chestCount] || 1;
       var jackpotsWon = {};
 
       // Generate chest contents up front (matches game.js logic), then sample picks
@@ -405,6 +440,57 @@
       }
     }
 
+    // ─── Progressive Jackpot Picker ──────────────────────────────────
+    // Headless simulation of the 3×3 reveal mini-game. Player reveals tiles
+    // in random order until 3 of any tier match (win that tier) or 3 blanks
+    // come up (bust). Returns credits won + which tier (if any).
+    function runJackpotPicker(jackpotPools, skullCount) {
+      jackpotPools = jackpotPools || {
+        mini: JACKPOT_CONFIG.mini.start,
+        major: JACKPOT_CONFIG.major.start,
+        grand: JACKPOT_CONFIG.grand.start,
+      };
+      var cfg = JACKPOT_PICKER_CONFIG;
+      var totalWeight = 0;
+      for (var ti = 0; ti < cfg.tiles.length; ti++) totalWeight += cfg.tiles[ti].weight;
+
+      // Roll all 9 tile values up front
+      var tiles = [];
+      for (var n = 0; n < cfg.gridSize; n++) {
+        var roll = Math.random() * totalWeight;
+        var cum = 0, picked = null;
+        for (var pi = 0; pi < cfg.tiles.length; pi++) {
+          cum += cfg.tiles[pi].weight;
+          if (roll < cum) { picked = cfg.tiles[pi].type; break; }
+        }
+        tiles.push(picked);
+      }
+      shuffle(tiles); // pick order is effectively random
+
+      var counts = { blank: 0, mini: 0, major: 0, grand: 0 };
+      var revealed = 0;
+      var wonTier = null;
+      for (var k = 0; k < tiles.length; k++) {
+        counts[tiles[k]]++;
+        revealed++;
+        if (counts.mini  >= cfg.matchToWin) { wonTier = 'mini';  break; }
+        if (counts.major >= cfg.matchToWin) { wonTier = 'major'; break; }
+        if (counts.grand >= cfg.matchToWin) { wonTier = 'grand'; break; }
+        if (counts.blank >= cfg.bustOn) break; // bust
+      }
+
+      var winCredits = wonTier ? jackpotPools[wonTier] : 0;
+      var jackpotsWon = {};
+      if (wonTier) jackpotsWon[wonTier] = 1;
+      return {
+        winCredits: winCredits,
+        wonTier: wonTier,
+        jackpotsWon: jackpotsWon,
+        revealed: revealed,
+        tiles: tiles,
+      };
+    }
+
     return {
       // Pure game functions (used by both game.js and simulate.js)
       randomSymbolFromReel: randomSymbolFromReel,
@@ -415,11 +501,13 @@
       countSymbol: countSymbol,
       checkBonusTrigger: checkBonusTrigger,
       checkTreasureHunt: checkTreasureHunt,
+      checkJackpotTrigger: checkJackpotTrigger,
       // Headless spin (used by simulate.js)
       runSpin: runSpin,
       runFreeSpinsSession: runFreeSpinsSession,
       runWheelOfFortune: runWheelOfFortune,
       runTreasureHunt: runTreasureHunt,
+      runJackpotPicker: runJackpotPicker,
     };
   }
 
@@ -437,6 +525,7 @@
       TREASURE_HUNT_CONFIG: TREASURE_HUNT_CONFIG,
       WHEEL_SEGMENTS: WHEEL_SEGMENTS,
       JACKPOT_CONFIG: JACKPOT_CONFIG,
+      JACKPOT_PICKER_CONFIG: JACKPOT_PICKER_CONFIG,
     });
   }
 })();

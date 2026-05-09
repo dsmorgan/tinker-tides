@@ -51,9 +51,11 @@ function newStats() {
       scatter:      0, // free-spins triggers (3+ scatters)
       bonus:        0, // wheel triggers
       treasureHunt: 0,
-      randomMini:   0,
-      randomMajor:  0,
-      randomGrand:  0,
+      jackpotPicker: 0, // 3+ skulls → opened the picker
+      jackpotPickerWin: 0, // of those, how many won any tier
+      pickerMini:   0,
+      pickerMajor:  0,
+      pickerGrand:  0,
       jackpotChestMini:  0,
       jackpotChestMajor: 0,
       wheelJackpotMini:  0,
@@ -92,14 +94,13 @@ function bucketWin(stats, win, bet) {
   else                  stats.winsBySize.mega++;
 }
 
-// Random check for per-spin progressive triggers (matches checkRandomJackpot
-// in game.js: each tier rolls independently in tier-order, first hit wins).
+// Random per-spin RNG trigger (deprecated — kept for backward-compat but
+// JACKPOT_CONFIG.*.triggerChance is now 0, so this never fires).
 function rollRandomJackpot(stats) {
   for (var tier in JACKPOT_CONFIG) {
     if (Math.random() < JACKPOT_CONFIG[tier].triggerChance) {
       var pool = stats.jackpotPools[tier];
       stats.jackpotPools[tier] = JACKPOT_CONFIG[tier].start;
-      stats.triggers['random' + tier.charAt(0).toUpperCase() + tier.slice(1)]++;
       return { tier: tier, amount: pool };
     }
   }
@@ -153,7 +154,7 @@ for (var i = 0; i < spins; i++) {
   }
   if (spin.treasureHuntTriggered) {
     stats.triggers.treasureHunt++;
-    var th = Engine.runTreasureHunt(stats.jackpotPools);
+    var th = Engine.runTreasureHunt(stats.jackpotPools, spin.treasureChestCount);
     spinWin += th.winCredits;
     stats.bonusContribution.treasureHunt += th.winCredits;
     for (var tjt in th.jackpotsWon) {
@@ -161,8 +162,20 @@ for (var i = 0; i < spins; i++) {
       stats.jackpotPools[tjt] = JACKPOT_CONFIG[tjt].start;
     }
   }
+  // Skull-scatter Jackpot Picker (3+ skulls anywhere)
+  if (spin.jackpotTriggered) {
+    stats.triggers.jackpotPicker++;
+    var jp = Engine.runJackpotPicker(stats.jackpotPools, spin.jackpotSkullCount);
+    spinWin += jp.winCredits;
+    stats.bonusContribution.jackpots += jp.winCredits;
+    if (jp.wonTier) {
+      stats.triggers.jackpotPickerWin++;
+      stats.triggers['picker' + jp.wonTier.charAt(0).toUpperCase() + jp.wonTier.slice(1)]++;
+      stats.jackpotPools[jp.wonTier] = JACKPOT_CONFIG[jp.wonTier].start;
+    }
+  }
 
-  // Random per-spin progressive trigger (separate from chests/wheel)
+  // Legacy random per-spin trigger (no-op now since triggerChance=0)
   var rj = rollRandomJackpot(stats);
   if (rj) {
     spinWin += rj.amount;
@@ -177,8 +190,8 @@ for (var i = 0; i < spins; i++) {
 
   if (!quiet && Date.now() - lastReport > 2000) {
     var rtp = (stats.totalWon / stats.totalBet * 100).toFixed(2);
-    var pct = (stats.spins / spins * 100).toFixed(1);
-    process.stdout.write('\r' + pct + '% — ' + stats.spins.toLocaleString() +
+    var pctDone = (stats.spins / spins * 100).toFixed(1);
+    process.stdout.write('\r' + pctDone + '% — ' + stats.spins.toLocaleString() +
       ' spins, RTP ' + rtp + '%, biggest win ' + stats.biggestWin.toLocaleString() + ' credits      ');
     lastReport = Date.now();
   }
@@ -226,6 +239,13 @@ console.log(bar('Wheel of Fortune:',         pct(stats.triggers.bonus,        st
             '   1 in ' + (stats.triggers.bonus ? Math.round(stats.spins / stats.triggers.bonus).toLocaleString() : '∞'));
 console.log(bar('Treasure Hunt:',            pct(stats.triggers.treasureHunt, stats.spins)) +
             '   1 in ' + (stats.triggers.treasureHunt ? Math.round(stats.spins / stats.triggers.treasureHunt).toLocaleString() : '∞'));
+console.log(bar('Jackpot Picker (3+ skull):', pct(stats.triggers.jackpotPicker, stats.spins)) +
+            '   1 in ' + (stats.triggers.jackpotPicker ? Math.round(stats.spins / stats.triggers.jackpotPicker).toLocaleString() : '∞'));
+console.log(bar('  → won any tier:', pct(stats.triggers.jackpotPickerWin, stats.triggers.jackpotPicker || 1)) +
+            '   (' + stats.triggers.jackpotPickerWin.toLocaleString() + ' / ' + stats.triggers.jackpotPicker.toLocaleString() + ' picker spins)');
+console.log(bar('  → won Mini:', stats.triggers.pickerMini.toLocaleString()));
+console.log(bar('  → won Major:', stats.triggers.pickerMajor.toLocaleString()));
+console.log(bar('  → won Grand:', stats.triggers.pickerGrand.toLocaleString()));
 console.log();
 
 console.log('── Reel-5 boost (4-of-a-kind anticipation hit) ─────────────');
@@ -237,10 +257,10 @@ console.log(bar('Total 5-of-a-kind:', pct(stats.fiveOfAKindCount, stats.spins)) 
             '   1 in ' + (stats.fiveOfAKindCount ? Math.round(stats.spins / stats.fiveOfAKindCount).toLocaleString() : '∞'));
 console.log();
 
-console.log('── Jackpot trigger frequency ───────────────────────────────');
-var totalJpMini  = stats.triggers.randomMini  + stats.triggers.jackpotChestMini  + stats.triggers.wheelJackpotMini;
-var totalJpMajor = stats.triggers.randomMajor + stats.triggers.jackpotChestMajor + stats.triggers.wheelJackpotMajor;
-var totalJpGrand = stats.triggers.randomGrand + stats.triggers.wheelJackpotGrand;
+console.log('── Total jackpot wins (picker + chest + wheel) ─────────────');
+var totalJpMini  = stats.triggers.pickerMini  + stats.triggers.jackpotChestMini  + stats.triggers.wheelJackpotMini;
+var totalJpMajor = stats.triggers.pickerMajor + stats.triggers.jackpotChestMajor + stats.triggers.wheelJackpotMajor;
+var totalJpGrand = stats.triggers.pickerGrand + stats.triggers.wheelJackpotGrand;
 console.log(bar('Mini:',  totalJpMini)  + '   1 in ' + (totalJpMini  ? Math.round(stats.spins / totalJpMini).toLocaleString()  : '∞'));
 console.log(bar('Major:', totalJpMajor) + '   1 in ' + (totalJpMajor ? Math.round(stats.spins / totalJpMajor).toLocaleString() : '∞'));
 console.log(bar('Grand:', totalJpGrand) + '   1 in ' + (totalJpGrand ? Math.round(stats.spins / totalJpGrand).toLocaleString() : '∞'));

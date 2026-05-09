@@ -44,15 +44,24 @@ const SYMBOLS = {
   cannon:         { id: 'cannon',         name: 'Cannon',            icon: 'cannon',               tier: 'low',     pay: [0, 1, 10, 32, 70] },
   // Mid value (4)
   parrot:         { id: 'parrot',         name: 'Parrot',            icon: 'parrot-head',          tier: 'mid',     pay: [0, 0, 18, 60, 140] },
-  ship:           { id: 'ship',           name: 'Ship',              icon: 'pirate-flag',          tier: 'mid',     pay: [0, 0, 18, 60, 140] },
+  ship:           { id: 'ship',           name: 'Jolly Roger',       icon: 'pirate-flag',          tier: 'mid',     pay: [0, 0, 18, 60, 140] },
   hat:            { id: 'hat',            name: 'Pirate Hat',        icon: 'pirate-hat',           tier: 'mid',     pay: [0, 0, 30, 80, 225] },
   swords:         { id: 'swords',         name: 'Crossed Swords',    icon: 'crossed-swords',       tier: 'mid',     pay: [0, 0, 30, 80, 225] },
-  // High value (3)
-  chest:          { id: 'chest',          name: 'Treasure Chest',    icon: 'open-treasure-chest',  tier: 'high',    pay: [0, 0, 35, 160, 450] },
-  skull:          { id: 'skull',          name: 'Skull & Crossbones',icon: 'skull-crossed-bones',  tier: 'high',    pay: [0, 0, 50, 200, 700] },
-  captain:        { id: 'captain',        name: 'Pirate Captain',    icon: 'pirate-captain',       tier: 'high',    pay: [0, 0, 75, 300, 1200] },
+  // High value (was 3, now 2: chest moved to special since it's a pure scatter trigger).
+  // Chest pays nothing on paylines — its only role is to trigger Treasure Hunt
+  // (3+ anywhere = ×1, 4 = ×2, 5 = ×3 starting multiplier).
+  chest:          { id: 'chest',          name: 'Treasure Chest',    icon: 'open-treasure-chest',  tier: 'scatter', pay: [0, 0, 0, 0, 0] },
+  // Skull is now a PURE scatter trigger for the progressive jackpot picker.
+  // 3+ skulls anywhere on the grid → opens the 3×3 jackpot reveal mini-game.
+  // Pays nothing on paylines.
+  skull:          { id: 'skull',          name: 'Skull & Crossbones',icon: 'skull-crossed-bones',  tier: 'scatter', pay: [0, 0, 0, 0, 0] },
+  captain:        { id: 'captain',        name: 'Pirate Captain',    icon: 'pirate-captain',       tier: 'high',    pay: [0, 0, 90, 350, 1500] },
   // Special (3)
-  wild:           { id: 'wild',           name: 'Gold Coin (Wild)',  icon: 'two-coins',            tier: 'wild',    pay: [0, 0, 90, 400, 2400], isWild: true },
+  // Wild has NO standalone pay — true wild, substitutes only. Wilds appear on
+  // reels 2-5; ~85% of the time reel 1 has a substitutable symbol the wild can
+  // extend, so standalone pay was just a consolation prize for the rare case
+  // where reel 1 was a non-substitutable scatter/bonus.
+  wild:           { id: 'wild',           name: 'Gold Coin (Wild)',  icon: 'two-coins',            tier: 'wild',    pay: [0, 0, 0, 0, 0], isWild: true },
   scatter:        { id: 'scatter',        name: 'Treasure Map',      icon: 'treasure-map',         tier: 'scatter', pay: [0, 0, 0, 0, 0] },
   bonus:          { id: 'bonus',          name: 'Ship Wheel',        icon: 'ship-wheel',           tier: 'bonus',   pay: [0, 0, 0, 0, 0] },
 };
@@ -194,35 +203,35 @@ const REEL_STRIPS = [
   buildReelStrip({
     compass: 10, anchor: 10, rum: 8, cannon: 8,
     parrot: 5, ship: 5, hat: 4, swords: 4,
-    chest: 3, skull: 2, captain: 1,
+    chest: 1, skull: 3, captain: 1,
     scatter: 2, bonus: 2,
   }),
   // Reel 1 — has wild, slightly leaner low-pays
   buildReelStrip({
     compass: 9, anchor: 9, rum: 7, cannon: 7,
     parrot: 5, ship: 5, hat: 4, swords: 4,
-    chest: 3, skull: 2, captain: 1,
+    chest: 1, skull: 3, captain: 1,
     wild: 3, scatter: 2, bonus: 1,
   }),
   // Reel 2 — bonus reel (3 bonus symbols here gate the wheel feature)
   buildReelStrip({
     compass: 9, anchor: 9, rum: 7, cannon: 7,
     parrot: 5, ship: 5, hat: 4, swords: 4,
-    chest: 3, skull: 2, captain: 1,
+    chest: 1, skull: 3, captain: 1,
     wild: 3, scatter: 2, bonus: 2,
   }),
   // Reel 3
   buildReelStrip({
     compass: 9, anchor: 9, rum: 7, cannon: 7,
     parrot: 5, ship: 5, hat: 4, swords: 4,
-    chest: 3, skull: 2, captain: 1,
+    chest: 1, skull: 3, captain: 1,
     wild: 3, scatter: 2, bonus: 1,
   }),
   // Reel 4 — bonus reel + heavier low-pay tail (matches reel 0)
   buildReelStrip({
     compass: 10, anchor: 10, rum: 8, cannon: 8,
     parrot: 5, ship: 5, hat: 4, swords: 4,
-    chest: 3, skull: 2, captain: 1,
+    chest: 1, skull: 3, captain: 1,
     wild: 3, scatter: 2, bonus: 2,
   }),
 ];
@@ -238,6 +247,10 @@ const FREE_SPINS_CONFIG = {
 // Treasure Hunt config
 const TREASURE_HUNT_CONFIG = {
   numChests: 12,
+  // Starting prize multiplier based on the number of scatter chests that
+  // triggered TH. 3 chests opens a base hunt, 4/5 chests start with a
+  // pre-applied 2× / 3× multiplier on all collected prizes.
+  startMultiplier: { 3: 1, 4: 2, 5: 3 },
   prizes: [
     { type: 'coins', min: 5, max: 15, weight: 30 },
     { type: 'coins', min: 15, max: 30, weight: 20 },
@@ -269,9 +282,27 @@ const WHEEL_SEGMENTS = [
 
 // Jackpot config
 const JACKPOT_CONFIG = {
-  mini:  { start: 100,   triggerChance: 1/500,   contribution: 0.005, label: 'Mini',  color: '#cd7f32' },
-  major: { start: 1000,  triggerChance: 1/2500,  contribution: 0.0035, label: 'Major', color: '#c0c0c0' },
-  grand: { start: 10000, triggerChance: 1/10000, contribution: 0.0015, label: 'Grand', color: '#ffd700' },
+  // triggerChance: 0 disables the old hidden per-spin RNG trigger — jackpots
+  // now ONLY fire from the visible skull-scatter picker, the wheel JACKPOT
+  // segment, and treasure-hunt jackpot chests. Pool growth is unchanged.
+  mini:  { start: 175,   triggerChance: 0, contribution: 0.005,  label: 'Mini',  color: '#cd7f32' },
+  major: { start: 1750,  triggerChance: 0, contribution: 0.0035, label: 'Major', color: '#c0c0c0' },
+  grand: { start: 17500, triggerChance: 0, contribution: 0.0015, label: 'Grand', color: '#ffd700' },
+};
+
+// Skull-triggered jackpot picker (3×3 reveal grid).
+// Each tile rolls independently from these weights. Player keeps revealing
+// until 3 of the same TIER appear (win that tier) or 3 BLANKS appear (bust).
+const JACKPOT_PICKER_CONFIG = {
+  gridSize: 9,        // 3×3
+  matchToWin: 3,      // 3 of a tier wins
+  bustOn: 3,          // 3 blanks ends the round with no jackpot
+  tiles: [
+    { type: 'blank', weight: 50 },
+    { type: 'mini',  weight: 30 },
+    { type: 'major', weight: 15 },
+    { type: 'grand', weight: 5 },
+  ],
 };
 
 // Economy (credits = pennies, $1 = 100 credits)
@@ -312,7 +343,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SYMBOL_COLORS, RARITY_TINTS, SYMBOLS,
     PAYLINES, BET_LEVELS, REEL_STRIPS,
     FREE_SPINS_CONFIG, TREASURE_HUNT_CONFIG,
-    WHEEL_SEGMENTS, JACKPOT_CONFIG,
+    WHEEL_SEGMENTS, JACKPOT_CONFIG, JACKPOT_PICKER_CONFIG,
     STARTING_CREDITS, BILL_VALUE, LOYALTY_TIERS,
     PAYLINE_COLOR_GROUPS, PAYLINE_GROUP_COUNTS, PAYLINE_COLORS,
   };

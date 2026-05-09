@@ -1,0 +1,67 @@
+# Tinker Tides — RTP simulation (SKULL-SCATTER JACKPOT PICKER)
+# Generated: 2026-05-09
+# Diff vs tuned-100rtp.txt:
+#   - Skull is now a PURE scatter (no payline pay), bumped 2 → 3 per reel
+#   - 3+ skulls anywhere → 3×3 reveal Jackpot Picker mini-game
+#   - Picker tile weights: blank 50, mini 30, major 15, grand 5
+#     (high blank rate = constant near-miss tension during the bonus)
+#   - Pool starts bumped 1.75× (Mini 175, Major 1750, Grand 17500) to
+#     compensate for removed random-per-spin path + skull payline RTP
+#   - Random per-spin progressive trigger DISABLED (triggerChance=0); jackpots
+#     now ONLY fire from picker / wheel-jackpot-segment / TH jackpot chests
+#   - Chest count rebalanced 3 → 1/reel (TH back to "rare" feel after the
+#     previous explosion when both triggers stacked)
+#   - 2-skull near-miss glow + reel-stop anticipation for skulls/chests/scatters
+#
+# Picker stats:
+#   Trigger:   1 in 43 spins (2.34%)        — ~2 trigger events per minute of play
+#   Win rate:  31.7% of triggers            — ~68% bust on 3 blanks (heavy near-miss)
+#   Mini:      59,794 wins (~80% of picker wins)
+#   Major:     13,463 wins (~18%)
+#   Grand:        833 wins (~1.1%)          — true 1-in-12k spin event
+#
+═══ Tinker Tides RTP simulation ════════════════════════════
+Spins:                            10,000,000   (12.8s, 780,031 spins/s)
+Total wagered (credits):         200,000,000
+Total returned:                  201,433,356
+────────────────────────────────────────────────────────────
+RTP:                                100.717%
+Hit frequency:                        30.30%
+Biggest win:                         635,040 credits  (31752× bet)
+
+── Win-size distribution (% of paying spins) ───────────────
+Tiny    (< 1× bet):                59.424%
+Small   (1–5× bet):                29.058%
+Mid     (5–25× bet):               10.400%
+Big     (25–100× bet):              0.926%
+Huge    (100–500× bet):             0.141%
+Mega    (500×+ bet):                0.052%
+
+── Bonus trigger frequency ─────────────────────────────────
+Free spins (3+ scatter):            0.746%   1 in 134
+Wheel of Fortune:                   0.082%   1 in 1,227
+Treasure Hunt:                      0.103%   1 in 972
+Jackpot Picker (3+ skull):          2.340%   1 in 43
+  → won any tier:                  31.666%   (74,090 / 233,974 picker spins)
+  → won Mini:                       59,794
+  → won Major:                      13,463
+  → won Grand:                         833
+
+── Reel-5 boost (4-of-a-kind anticipation hit) ─────────────
+Boost fired:                        2.966%   1 in 34
+Boost → 5-of-kind:                 56.983%   (169,026 / 296,626 boosted spins)
+Total 5-of-a-kind:                  1.690%   1 in 59
+
+── Total jackpot wins (picker + chest + wheel) ─────────────
+Mini:                                61061   1 in 164
+Major:                               14056   1 in 711
+Grand:                                 916   1 in 10,917
+
+── RTP contribution by source ──────────────────────────────
+Paylines:                          47.962%
+Free spins:                         6.057%
+Wheel of Fortune:                   4.745%
+Treasure Hunt:                     16.691%
+Random progressives:               25.263%
+TOTAL:                            100.717%
+
